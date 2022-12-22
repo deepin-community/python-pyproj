@@ -1,0 +1,643 @@
+python-pyproj (3.2.1-2) unstable; urgency=medium
+
+  * Add patch to fix test failures with PROJ 8.2.0.
+    (closes: #998596)
+
+ -- Bas Couwenberg <sebastic@debian.org>  Thu, 04 Nov 2021 21:24:58 +0100
+
+python-pyproj (3.2.1-1) unstable; urgency=medium
+
+  * New upstream release.
+  * Move from experimental to unstable.
+
+ -- Bas Couwenberg <sebastic@debian.org>  Sat, 18 Sep 2021 06:48:37 +0200
+
+python-pyproj (3.2.1~rc0-1~exp1) experimental; urgency=medium
+
+  * New upstream release candidate.
+  * Bump Standards-Version to 4.6.0, no changes.
+  * Bump debhelper compat to 12, changes:
+    - Drop --list-missing from dh_install
+
+ -- Bas Couwenberg <sebastic@debian.org>  Wed, 15 Sep 2021 07:30:23 +0200
+
+python-pyproj (3.2.0-1) unstable; urgency=medium
+
+  * New upstream release.
+  * Move from experimental to unstable.
+
+ -- Bas Couwenberg <sebastic@debian.org>  Sat, 04 Sep 2021 07:50:13 +0200
+
+python-pyproj (3.2~rc0-1~exp1) experimental; urgency=medium
+
+  * New upstream release.
+  * Add python3-packaging to build dependencies.
+
+ -- Bas Couwenberg <sebastic@debian.org>  Wed, 01 Sep 2021 05:22:20 +0200
+
+python-pyproj (3.1.0-1) unstable; urgency=medium
+
+  * Move from experimental to unstable.
+
+ -- Bas Couwenberg <sebastic@debian.org>  Sun, 15 Aug 2021 13:13:11 +0200
+
+python-pyproj (3.1.0-1~exp1) experimental; urgency=medium
+
+  * New upstream release.
+
+ -- Bas Couwenberg <sebastic@debian.org>  Tue, 25 May 2021 05:48:19 +0200
+
+python-pyproj (3.1~rc1-1~exp1) experimental; urgency=medium
+
+  * New upstream release candidate.
+  * Drop test_geod patch, included upstream.
+
+ -- Bas Couwenberg <sebastic@debian.org>  Sat, 22 May 2021 07:27:51 +0200
+
+python-pyproj (3.1~rc0-1~exp2) experimental; urgency=medium
+
+  * Add upstream patch to fix test failure on 64bit PowerPC.
+
+ -- Bas Couwenberg <sebastic@debian.org>  Thu, 20 May 2021 14:58:55 +0200
+
+python-pyproj (3.1~rc0-1~exp1) experimental; urgency=medium
+
+  * New upstream release candidate.
+  * Update watch file for GitHub URL changes.
+
+ -- Bas Couwenberg <sebastic@debian.org>  Wed, 19 May 2021 05:52:44 +0200
+
+python-pyproj (3.0.1-1~exp1) experimental; urgency=medium
+
+  * New upstream release.
+  * Update copyright file.
+
+ -- Bas Couwenberg <sebastic@debian.org>  Fri, 05 Mar 2021 06:09:07 +0100
+
+python-pyproj (3.0.1~rc0-1~exp1) experimental; urgency=medium
+
+  * New upstream release candidate.
+    (closes: #983223)
+
+ -- Bas Couwenberg <sebastic@debian.org>  Tue, 02 Mar 2021 05:59:12 +0100
+
+python-pyproj (3.0.0-2) unstable; urgency=medium
+
+  * Bump watch file version to 4.
+  * Bump Standards-Version to 4.5.1, no changes.
+  * Don't build docs, causes FTBFS.
+    (closes: #982698)
+
+ -- Bas Couwenberg <sebastic@debian.org>  Sat, 13 Feb 2021 19:21:04 +0100
+
+python-pyproj (3.0.0-1) unstable; urgency=medium
+
+  * Ignore .post releases in watch file.
+  * Move from experimental to unstable.
+
+ -- Bas Couwenberg <sebastic@debian.org>  Fri, 06 Nov 2020 10:51:26 +0100
+
+python-pyproj (3.0.0-1~exp1) experimental; urgency=medium
+
+  * New upstream release.
+
+ -- Bas Couwenberg <sebastic@debian.org>  Thu, 05 Nov 2020 05:48:27 +0100
+
+python-pyproj (3.0~rc2-1~exp1) experimental; urgency=medium
+
+  * New upstream release candidate.
+  * Don't run tests with cli or grid marker either.
+
+ -- Bas Couwenberg <sebastic@debian.org>  Wed, 04 Nov 2020 06:00:06 +0100
+
+python-pyproj (3.0~rc1-1~exp1) experimental; urgency=medium
+
+  * New upstream release candidate.
+  * Don't run tests with network marker.
+  * Drop patches, included/applied upstream.
+
+ -- Bas Couwenberg <sebastic@debian.org>  Tue, 03 Nov 2020 05:35:30 +0100
+
+python-pyproj (3.0~rc0+ds1-1~exp1) experimental; urgency=medium
+
+  * New repacked upstream release.
+  * Don't exclude docs from upstream tarball.
+  * Also build manpages.
+  * Add patch to fix spelling errors.
+
+ -- Bas Couwenberg <sebastic@debian.org>  Mon, 02 Nov 2020 16:51:28 +0100
+
+python-pyproj (3.0~rc0+ds-1~exp1) experimental; urgency=medium
+
+  * New upstream release candidate.
+  * Drop patches, included upstream.
+  * Don't ignore test failures on arm*, mips* & s390x.
+  * Add certifi, pandas & xarray to build dependencies.
+  * Ignore test failures everywhere.
+
+ -- Bas Couwenberg <sebastic@debian.org>  Mon, 02 Nov 2020 05:46:03 +0100
+
+python-pyproj (2.6.1+ds-4) unstable; urgency=medium
+
+  * Ignore test failures on arm*, mips* & s390x.
+
+ -- Bas Couwenberg <sebastic@debian.org>  Sun, 01 Nov 2020 13:57:26 +0100
+
+python-pyproj (2.6.1+ds-3) unstable; urgency=medium
+
+  * Add patch to fix FTBFS with PROJ 7.2.0.
+  * Update lintian overrides.
+
+ -- Bas Couwenberg <sebastic@debian.org>  Sun, 01 Nov 2020 12:18:28 +0100
+
+python-pyproj (2.6.1+ds-2) unstable; urgency=medium
+
+  * Add upstream patch to fix FTBFS with PROJ 7.1.0.
+  * Require at least PROJ 7.1.0.
+
+ -- Bas Couwenberg <sebastic@debian.org>  Wed, 01 Jul 2020 15:22:23 +0200
+
+python-pyproj (2.6.1+ds-1) unstable; urgency=medium
+
+  * New upstream release.
+  * Drop Breaks for pyresample, fixed upstream.
+  * Move from experimental to unstable.
+
+ -- Bas Couwenberg <sebastic@debian.org>  Mon, 04 May 2020 05:42:40 +0200
+
+python-pyproj (2.6.1~rc1+ds-1~exp1) experimental; urgency=medium
+
+  * New upstream release candidate.
+  * Add Breaks for rdeps with autopkgtest failures.
+
+ -- Bas Couwenberg <sebastic@debian.org>  Sun, 03 May 2020 06:47:48 +0200
+
+python-pyproj (2.6.1~rc0+ds-1~exp1) experimental; urgency=medium
+
+  * New upstream release candidate.
+
+ -- Bas Couwenberg <sebastic@debian.org>  Sat, 02 May 2020 06:25:38 +0200
+
+python-pyproj (2.6.0+ds-1) unstable; urgency=medium
+
+  * New upstream release.
+  * Update copyright file, changes:
+    - Update copyright years
+    - Change license from MIT-short to Expat
+  * Bump debhelper compat to 10, changes:
+    - Drop --parallel option, enabled by default
+  * Move from experimental to unstable.
+
+ -- Bas Couwenberg <sebastic@debian.org>  Wed, 18 Mar 2020 05:46:33 +0100
+
+python-pyproj (2.6.0~rc0+ds-1~exp1) experimental; urgency=medium
+
+  * New upstream release candidate.
+
+ -- Bas Couwenberg <sebastic@debian.org>  Fri, 13 Mar 2020 06:34:11 +0100
+
+python-pyproj (2.5.0+ds-1) unstable; urgency=medium
+
+  * New upstream release.
+  * Move from experimental to unstable.
+
+ -- Bas Couwenberg <sebastic@debian.org>  Sat, 22 Feb 2020 08:04:48 +0100
+
+python-pyproj (2.5~rc0+ds-1~exp1) experimental; urgency=medium
+
+  * New upstream release candidate.
+  * Drop patches, included upstream.
+
+ -- Bas Couwenberg <sebastic@debian.org>  Fri, 21 Feb 2020 06:55:18 +0100
+
+python-pyproj (2.4.2+ds-4) unstable; urgency=medium
+
+  * Add upstream patches for PROJ 6.3.x support.
+  * Add patch to fix test failure with PROJ 7.0.0.
+
+ -- Bas Couwenberg <sebastic@debian.org>  Wed, 19 Feb 2020 20:09:53 +0100
+
+python-pyproj (2.4.2+ds-3) unstable; urgency=medium
+
+  * Drop Name field from upstream metadata.
+  * Bump Standards-Version to 4.5.0, no changes.
+  * Add patch to fix FTBFS due to test failures.
+    (closes: #950660)
+
+ -- Bas Couwenberg <sebastic@debian.org>  Tue, 04 Feb 2020 16:45:47 +0100
+
+python-pyproj (2.4.2+ds-2) unstable; urgency=medium
+
+  * Move from experimental to unstable.
+
+ -- Bas Couwenberg <sebastic@debian.org>  Mon, 02 Dec 2019 05:46:49 +0100
+
+python-pyproj (2.4.2+ds-1) experimental; urgency=medium
+
+  * New upstream release.
+
+ -- Bas Couwenberg <sebastic@debian.org>  Sun, 01 Dec 2019 06:00:58 +0100
+
+python-pyproj (2.4.2~rc0+ds-1~exp1) experimental; urgency=medium
+
+  * New upstream release candidate.
+  * Drop Provides: ${python3:Provides}.
+
+ -- Bas Couwenberg <sebastic@debian.org>  Tue, 26 Nov 2019 12:31:26 +0100
+
+python-pyproj (2.4.1+ds-1) unstable; urgency=medium
+
+  * New upstream release.
+  * Move from experimental to unstable.
+
+ -- Bas Couwenberg <sebastic@debian.org>  Wed, 06 Nov 2019 14:28:09 +0100
+
+python-pyproj (2.4.1~rc0+ds-1~exp1) experimental; urgency=medium
+
+  * New upstream release candidate.
+  * Bump Standards-Version to 4.4.1, no changes.
+
+ -- Bas Couwenberg <sebastic@debian.org>  Sat, 02 Nov 2019 07:03:53 +0100
+
+python-pyproj (2.4.0+ds-1) unstable; urgency=medium
+
+  * New upstream release.
+  * Move from experimental to unstable.
+
+ -- Bas Couwenberg <sebastic@debian.org>  Sat, 21 Sep 2019 06:27:00 +0200
+
+python-pyproj (2.4~rc1+ds-1~exp1) experimental; urgency=medium
+
+  * New upstream release candidate.
+  * Drop patches, applied/fixed upstream.
+
+ -- Bas Couwenberg <sebastic@debian.org>  Fri, 20 Sep 2019 14:50:23 +0200
+
+python-pyproj (2.4~rc0+ds-1~exp1) experimental; urgency=medium
+
+  * New upstream release candidate.
+  * Update watch file for pre-releases.
+  * Add patch to use python3 interpreter for tests.
+  * Add patch to fix spelling errors.
+  * Use ${python3:Provides} substvar in Provides field.
+
+ -- Bas Couwenberg <sebastic@debian.org>  Thu, 19 Sep 2019 07:25:56 +0200
+
+python-pyproj (2.3.1+ds-1) unstable; urgency=medium
+
+  * Move from experimental to unstable.
+
+ -- Bas Couwenberg <sebastic@debian.org>  Mon, 02 Sep 2019 13:26:21 +0200
+
+python-pyproj (2.3.1+ds-1~exp1) experimental; urgency=medium
+
+  * New upstream release.
+  * Drop patches.
+
+ -- Bas Couwenberg <sebastic@debian.org>  Sun, 01 Sep 2019 07:27:23 +0200
+
+python-pyproj (2.3.0+ds-1) unstable; urgency=medium
+
+  * Move from experimental to unstable.
+
+ -- Bas Couwenberg <sebastic@debian.org>  Sun, 25 Aug 2019 15:34:52 +0200
+
+python-pyproj (2.3.0+ds-1~exp2) experimental; urgency=medium
+
+  * Add upstream patches to fix test failures.
+
+ -- Bas Couwenberg <sebastic@debian.org>  Tue, 20 Aug 2019 05:56:37 +0200
+
+python-pyproj (2.3.0+ds-1~exp1) experimental; urgency=medium
+
+  * New upstream release.
+  * Drop Python 2 package, no longer supported upstream.
+  * Add python3-shapely to build dependencies.
+  * Ignore test_datadir.py, causes FTBFS, see:
+    https://github.com/pyproj4/pyproj/issues/400
+
+ -- Bas Couwenberg <sebastic@debian.org>  Mon, 19 Aug 2019 16:48:49 +0200
+
+python-pyproj (2.2.2+ds-1~exp2) experimental; urgency=medium
+
+  * Drop aenum.patch, only required for Python < 3.6.
+  * Disable tests for Python 2, see: #934116.
+
+ -- Bas Couwenberg <sebastic@debian.org>  Wed, 07 Aug 2019 14:07:00 +0200
+
+python-pyproj (2.2.2+ds-1~exp1) experimental; urgency=medium
+
+  * New upstream release.
+  * Update gbp.conf to use --source-only-changes by default.
+  * Bump Standards-Version to 4.4.0, no changes.
+
+ -- Bas Couwenberg <sebastic@debian.org>  Sat, 13 Jul 2019 06:48:05 +0200
+
+python-pyproj (2.2.1+ds-1~exp1) experimental; urgency=medium
+
+  * New upstream release.
+  * Ignore test failures on armhf.
+
+ -- Bas Couwenberg <sebastic@debian.org>  Fri, 21 Jun 2019 06:39:48 +0200
+
+python-pyproj (2.2.0+ds-1~exp1) experimental; urgency=medium
+
+  * New upstream release.
+  * Add patch to embed aenum module required for Python < 3.6.
+
+ -- Bas Couwenberg <sebastic@debian.org>  Mon, 03 Jun 2019 13:28:57 +0200
+
+python-pyproj (2.1.3+ds-1~exp1) experimental; urgency=medium
+
+  * New upstream release.
+  * Update packaging to use pytest instead of nose2.
+
+ -- Bas Couwenberg <sebastic@debian.org>  Fri, 05 Apr 2019 06:59:30 +0200
+
+python-pyproj (2.1.2+ds-1~exp1) experimental; urgency=medium
+
+  * New upstream release.
+
+ -- Bas Couwenberg <sebastic@debian.org>  Sat, 23 Mar 2019 17:44:49 +0100
+
+python-pyproj (2.1.1+ds-1~exp1) experimental; urgency=medium
+
+  * New upstream release.
+
+ -- Bas Couwenberg <sebastic@debian.org>  Mon, 18 Mar 2019 07:20:32 +0100
+
+python-pyproj (2.1.0+ds-1~exp1) experimental; urgency=medium
+
+  * New upstream release.
+  * Also ignore test failures on kfreebsd-i386 & powerpc.
+  * Update GitHub URLs for move to pyproj4 organisation.
+  * Add pyproj Contributors to copyright holders.
+
+ -- Bas Couwenberg <sebastic@debian.org>  Fri, 15 Mar 2019 16:30:11 +0100
+
+python-pyproj (2.0.2+ds-1~exp1) experimental; urgency=medium
+
+  * New upstream release.
+  * Ignore test failures on i386, hppa & hurd-i386.
+
+ -- Bas Couwenberg <sebastic@debian.org>  Wed, 13 Mar 2019 15:36:35 +0100
+
+python-pyproj (2.0.1+ds-1~exp1) experimental; urgency=medium
+
+  * New upstream release.
+  * Drop patches, applied upstream.
+
+ -- Bas Couwenberg <sebastic@debian.org>  Sun, 10 Mar 2019 17:56:08 +0100
+
+python-pyproj (2.0.0+ds-1~exp1) experimental; urgency=medium
+
+  * New upstream release.
+  * Repack tarball to exclude pre-built HTML documentation.
+  * Update copyright file, changes:
+    - Add Alan D. Snow to copyright holders
+    - Drop license & copyright for PROJ sources
+  * Bump minimum required libproj-dev to 6.0.0.
+  * Drop obsolete patches. Refresh clean target patch.
+  * Add proj-bin to build dependencies.
+  * Add python{,3}-{mock,pytest} to build dependencies.
+  * Drop obsolete dh_clean override.
+  * Also call dh_numpy{,3} in dh_python{2,3} overrides.
+  * Export PROJ_LIB to use packaged data files.
+
+ -- Bas Couwenberg <sebastic@debian.org>  Fri, 08 Mar 2019 07:47:27 +0100
+
+python-pyproj (1.9.6-1) unstable; urgency=medium
+
+  * New upstream release.
+  * Bump Standards-Version to 4.3.0, no changes.
+  * Drop autopkgtests to test installability & module import.
+  * Add lintian override for testsuite-autopkgtest-missing.
+  * Update watch file to limit matches to archive path.
+  * Update copyright file for PROJ changes.
+  * Drop Cython patch, included upstream. Refresh remaining patches.
+  * Use nose2 for tests.
+  * Add patch to not cythonize in the clean target.
+  * Don't move _proj.c out of the way, file no longer included upstream.
+
+ -- Bas Couwenberg <sebastic@debian.org>  Sun, 30 Dec 2018 08:59:54 +0100
+
+python-pyproj (1.9.5.1-4) unstable; urgency=medium
+
+  [ Bas Couwenberg ]
+  * Update copyright-format URL to use HTTPS.
+  * Bump Standards-Version to 4.1.4, no changes.
+  * Check DEB_BUILD_PROFILES for nocheck in dh_auto_test override.
+  * Rename PROJ.4 to PROJ.
+  * Update Vcs-* URLs for Salsa.
+  * Add module import tests to autopkgtest configuration.
+  * Drop ancient X-Python{,3}-Version fields.
+  * Strip trailing whitespace from control & rules files.
+  * Use DEP-3 headers for Cython patch, specifically Origin header.
+  * Move _proj.c out of the way before the build and restore it afterwards.
+
+  [ Iain Lane ]
+  * debian/patches/Use-Cython-in-setup.py-to-generate-C-code-on-the-fly.patch:
+    Cherry-pick from upstream. This makes _proj.c get regenerated during the
+    build, which fixes FTBFS when it is incompatible with the current python
+    version (e.g. the shipped _proj.c doesn't work with python 3.7).
+  * debian/control: Build-Depend on cython for the above.
+
+ -- Bas Couwenberg <sebastic@debian.org>  Wed, 04 Jul 2018 16:09:05 +0200
+
+python-pyproj (1.9.5.1-3) unstable; urgency=medium
+
+  * Add patch to fix 'international' typo.
+  * Bump Standards-Version to 4.0.0, no changes.
+  * Add autopkgtest to test installability.
+  * Enable PIE hardening buildflags.
+
+ -- Bas Couwenberg <sebastic@debian.org>  Mon, 26 Jun 2017 07:48:46 +0200
+
+python-pyproj (1.9.5.1-2) unstable; urgency=medium
+
+  * Update Vcs-Git URL to use HTTPS.
+  * Update dh_python calls to act on specific package.
+  * Bump Standards-Version to 3.9.8, no changes.
+  * Drop dh_numpy{,3} calls, numpy support disabled upstream.
+    (closes: #821109)
+  * Enable all hardening buildflags, except PIE (causes build failure).
+
+ -- Bas Couwenberg <sebastic@debian.org>  Fri, 15 Apr 2016 18:25:26 +0200
+
+python-pyproj (1.9.5.1-1) unstable; urgency=medium
+
+  * New upstream release.
+
+ -- Bas Couwenberg <sebastic@debian.org>  Wed, 06 Jan 2016 23:53:14 +0100
+
+python-pyproj (1.9.5-1) unstable; urgency=medium
+
+  * New upstream release.
+  * Update copyright file, changes:
+    - Update copyright years for Charles Karney
+    - Add Even Rouault & Andrey Kiselev to copyright holders
+    - Add license & copyright for src/PJ_sch.c
+  * Drop 02-use_setup-proj.patch, no longer required.
+    setup.py now supports system proj directly.
+  * Update Vcs-Browser URL to use HTTPS.
+  * Update watch file, handle alternative tar extensions.
+  * Add patch to have setup.py not modify lib/pyproj/datadir.py*.
+    setup.py doesn't need to modify lib/pyproj/datadir.py,
+    it is already patched for use by the Debian package.
+  * Enable unit tests with pybuild override.
+
+ -- Bas Couwenberg <sebastic@debian.org>  Wed, 06 Jan 2016 23:41:02 +0100
+
+python-pyproj (1.9.4-1) unstable; urgency=medium
+
+  * Move from experimental to unstable.
+
+ -- Bas Couwenberg <sebastic@debian.org>  Sun, 03 May 2015 22:16:14 +0200
+
+python-pyproj (1.9.4-1~exp2) experimental; urgency=medium
+
+  * Require at least libproj-dev 4.9.0~ for geodesic.h.
+
+ -- Bas Couwenberg <sebastic@debian.org>  Sun, 01 Mar 2015 11:38:49 +0100
+
+python-pyproj (1.9.4-1~exp1) experimental; urgency=medium
+
+  * New upstream release.
+  * Add myself to Uploaders.
+  * Update watch file with sepwatch changes.
+  * Add gbp.conf to use pristine-tar by default.
+  * Restructure control file with cme.
+  * Bump debhelper compatibility to 9.
+  * Use canonical Vcs-* URLs.
+  * Enable parallel builds.
+  * Additional cleanup of generated files.
+  * Set pybuild name to pyproj.
+  * Remove pyversion file and add X-Python*-Version to control file.
+  * Drop doc-base registration for README.html, no longer included.
+  * Update copyright file using copyright-format 1.0.
+  * Use setup-proj.py for system installed Proj.4 library.
+  * Update watch file for GitHub releases.
+  * Add upstream metadata.
+  * Update Homepage URL for move to GitHub.
+  * Bump Standards-Version to 3.9.6, changes: canonical Vcs-* URLs,
+    copyright-format 1.0.
+
+ -- Bas Couwenberg <sebastic@debian.org>  Sun, 01 Mar 2015 04:29:13 +0100
+
+python-pyproj (1.8.9-1.1) unstable; urgency=low
+
+  * Non-maintainer upload.
+  * Add support for python3 (Closes: #720379)
+    - Add python3-pyroj to debian/control
+    - Add dh-python and python3-all-dev to build depends
+    - Build with python3 and buildstysem=pybuild
+    - Add debian/python-pyproj.install debian/python3-pyproj.install for
+      multi-binary package
+  * Drop obsolete build-dep on pysupport
+
+ -- Scott Kitterman <scott@kitterman.com>  Wed, 21 Aug 2013 01:26:12 -0400
+
+python-pyproj (1.8.9-1) unstable; urgency=low
+
+  * New upstream version
+  * Patches refreshed
+  * Use dh_python2 in debian/rules
+
+ -- David Paleino <dapal@debian.org>  Wed, 09 Mar 2011 17:39:24 +0100
+
+python-pyproj (1.8.8-3) unstable; urgency=low
+
+  * Upload to unstable.
+
+ -- David Paleino <dapal@debian.org>  Sat, 12 Feb 2011 17:18:00 +0100
+
+python-pyproj (1.8.8-2) experimental; urgency=low
+
+  * Upload to ease sync to Ubuntu
+  * debian/changelog: merged Ubuntu's "pyproj" changelog
+
+ -- David Paleino <dapal@debian.org>  Mon, 06 Dec 2010 20:20:31 +0100
+
+python-pyproj (1.8.8-1) experimental; urgency=low
+
+  * New upstream version
+  * debian/watch: don't use the redirector anymore, since I'm going
+    to shut it down
+  * debian/patches/02-dont_compile_datums.patch added: don't compile
+    datum files, since we're using the ones provided by proj-data
+
+ -- David Paleino <dapal@debian.org>  Thu, 16 Sep 2010 11:25:55 +0200
+
+python-pyproj (1.8.7-1) unstable; urgency=low
+
+  * New upstream version
+  * debian/control:
+    - Standards-Version bumped to 3.9.1, no changes needed
+
+ -- David Paleino <dapal@debian.org>  Mon, 02 Aug 2010 21:39:58 +0200
+
+python-pyproj (1.8.6-3) unstable; urgency=low
+
+  * debian/control:
+    - long description improved.
+    - Standards-Version bumped to 3.8.4, no changes needed
+    - added Vcs-* fields
+    - Build-Depend on python-all-dev, instead of python-dev
+  * debian/watch fixed to use googlecode.debian.net redirector
+    (Closes: #582869)
+  * debian/pyversions added (instead of XS-Python-Version in
+    debian/control)
+  * debian/README.source removed
+
+ -- David Paleino <dapal@debian.org>  Tue, 15 Jun 2010 18:06:00 +0200
+
+python-pyproj (1.8.6-2) unstable; urgency=low
+
+  * debian/control, debian/rules: remove usage of quilt
+    (Closes: #561395)
+
+ -- David Paleino <dapal@debian.org>  Fri, 18 Dec 2009 23:31:53 +0100
+
+python-pyproj (1.8.6-1) unstable; urgency=low
+
+  * Initial release. (Closes: #515053)
+
+ -- David Paleino <dapal@debian.org>  Fri, 11 Dec 2009 19:38:28 +0100
+
+pyproj (1.8.6-0ubuntu1) lucid; urgency=low
+
+  * New upstream release.
+  * debian/copyright: Update to the new format template.
+  * debian/control: Bump Standards.
+  * Add debian/README.source to make lintian happy.
+
+ -- Alessio Treglia <quadrispro@ubuntu.com>  Mon, 09 Nov 2009 11:22:49 +0100
+
+pyproj (1.8.5-0ubuntu4) lucid; urgency=low
+
+  * Limit override_dh_fixperms to architecture independent packages to fix
+    FTBFS on non-i386 arch (LP: #462619)
+
+ -- Scott Kitterman <scott@kitterman.com>  Wed, 28 Oct 2009 09:50:37 -0400
+
+pyproj (1.8.5-0ubuntu3) karmic; urgency=low
+
+  * Rework package to build again (FTBFS in Karmic rebuild test):
+    - Convert to debhelper minimal rules
+    - Update version requirements for debhelper and quilt
+    - Drop cdbs build-depends
+    - Bump compat to 7
+
+ -- Scott Kitterman <scott@kitterman.com>  Mon, 26 Oct 2009 23:54:00 -0400
+
+pyproj (1.8.5-0ubuntu2) jaunty; urgency=low
+
+  * No change rebuild with python2.6.
+
+ -- Matthias Klose <doko@ubuntu.com>  Thu, 26 Feb 2009 13:35:56 +0000
+
+pyproj (1.8.5-0ubuntu1) jaunty; urgency=low
+
+  * Initial Release (LP: #326996).
+
+ -- Chris Murphy <chrismurf+ubuntu@gmail.com>  Sun, 08 Feb 2009 23:41:29 -0500

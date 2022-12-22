@@ -1,0 +1,3 @@
+# Building manpage causes FTBFS: #982698
+no-manual-page *
+

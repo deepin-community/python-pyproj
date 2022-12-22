@@ -1,0 +1,36 @@
+#!/usr/bin/make -f
+# -*- makefile -*-
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+# Enable hardening build flags
+export DEB_BUILD_MAINT_OPTIONS=hardening=+all
+
+export PYBUILD_NAME=pyproj
+export PYBUILD_TEST_PYTEST=1
+export PYBUILD_TEST_ARGS=-v -m "not network and not cli and not grid"
+
+# Path to system installed PROJ data.
+export PROJ_DIR=/usr
+export PROJ_LIB=/usr/share/proj
+
+include /usr/share/dpkg/architecture.mk
+
+%:
+	dh $@ \
+		--with python3 \
+		--buildsystem=pybuild
+
+override_dh_auto_test:
+ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
+ifneq (,$(filter $(DEB_BUILD_ARCH),i386 hppa hurd-i386 kfreebsd-i386 powerpc))
+	dh_auto_test || echo "Ignoring test failures"
+else
+	dh_auto_test
+endif
+endif
+
+override_dh_python3:
+	dh_python3 -ppython3-pyproj
+	dh_numpy3 -ppython3-pyproj

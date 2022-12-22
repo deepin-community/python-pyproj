@@ -1,0 +1,41 @@
+Source: python-pyproj
+Maintainer: Debian GIS Project <pkg-grass-devel@lists.alioth.debian.org>
+Uploaders: David Paleino <dapal@debian.org>,
+           Bas Couwenberg <sebastic@debian.org>
+Section: python
+Priority: optional
+Build-Depends: debhelper-compat (= 12),
+               dh-python,
+               cython3,
+               libproj-dev (>= 7.1.0),
+               proj-bin (>= 7.1.0),
+               python3-all-dev,
+               python3-certifi,
+               python3-setuptools,
+               python3-mock,
+               python3-numpy,
+               python3-packaging,
+               python3-pandas,
+               python3-pytest,
+               python3-pytest-cov,
+               python3-shapely,
+               python3-xarray
+Standards-Version: 4.6.0
+Vcs-Browser: https://salsa.debian.org/debian-gis-team/python-pyproj
+Vcs-Git: https://salsa.debian.org/debian-gis-team/python-pyproj.git
+Homepage: https://github.com/pyproj4/pyproj
+
+Package: python3-pyproj
+Architecture: any
+Depends: ${python3:Depends},
+         ${shlibs:Depends},
+         ${misc:Depends},
+         proj-data
+Description: Python 3 interface to PROJ library
+ PROJ performs cartographic transformations between geographic (lat/lon)
+ and map projection (x/y) coordinates. It can also transform directly
+ from one map projection coordinate system to another.
+ .
+ This is a Python 3 binding to PROJ, it can receive coordinates as numpy
+ arrays, Python arrays, lists or scalars. This module is optimized for
+ numpy arrays.
