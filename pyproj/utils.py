@@ -4,7 +4,7 @@ Utility functions used within pyproj
 import json
 from array import array
 from enum import Enum, auto
-from typing import Any, Tuple
+from typing import Any
 
 
 def is_null(value: Any) -> bool:
@@ -63,7 +63,7 @@ class DataType(Enum):
     ARRAY = auto()
 
 
-def _copytobuffer_return_scalar(xxx: Any) -> Tuple[array, DataType]:
+def _copytobuffer_return_scalar(xxx: Any) -> tuple[array, DataType]:
     """
     Prepares scalar for PROJ C-API:
     - Makes a copy because PROJ modifies buffer in place
@@ -76,7 +76,7 @@ def _copytobuffer_return_scalar(xxx: Any) -> Tuple[array, DataType]:
 
     Returns
     -------
-    Tuple[Any, DataType]
+    tuple[Any, DataType]
         The copy of the data prepared for the PROJ API & Python Buffer API.
     """
     try:
@@ -85,7 +85,7 @@ def _copytobuffer_return_scalar(xxx: Any) -> Tuple[array, DataType]:
         raise TypeError("input must be a scalar") from None
 
 
-def _copytobuffer(xxx: Any, inplace: bool = False) -> Tuple[Any, DataType]:
+def _copytobuffer(xxx: Any, inplace: bool = False) -> tuple[Any, DataType]:
     """
     Prepares data for PROJ C-API:
     - Makes a copy because PROJ modifies buffer in place
@@ -100,16 +100,23 @@ def _copytobuffer(xxx: Any, inplace: bool = False) -> Tuple[Any, DataType]:
         A scalar, list, tuple, numpy.array,
         pandas.Series, xaray.DataArray, or dask.array.Array.
     inplace: bool, default=False
-        If True, will return the array withour a copy if it
+        If True, will return the array without a copy if it
         meets the requirements of the Python Buffer API & PROJ C-API.
 
     Returns
     -------
-    Tuple[Any, DataType]
+    tuple[Any, DataType]
         The copy of the data prepared for the PROJ API & Python Buffer API.
     """
     # check for pandas.Series, xarray.DataArray or dask.array.Array
-    if hasattr(xxx, "__array__") and callable(xxx.__array__):
+    # also handle numpy masked Arrays; note that pandas.Series also has a
+    # "mask" attribute, hence checking for simply the "mask" attr in that
+    # case isn't sufficient
+    if (
+        not hasattr(xxx, "hardmask")
+        and hasattr(xxx, "__array__")
+        and callable(xxx.__array__)
+    ):
         xxx = xxx.__array__()
 
     # handle numpy data

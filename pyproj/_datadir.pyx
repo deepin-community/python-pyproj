@@ -6,7 +6,7 @@ from libc.stdlib cimport free, malloc
 
 from pyproj._compat cimport cstrencode
 
-from pyproj.exceptions import DataDirError, ProjError
+from pyproj.exceptions import DataDirError
 from pyproj.utils import strtobool
 
 # for logging the internal PROJ messages
@@ -19,20 +19,8 @@ _USE_GLOBAL_CONTEXT = strtobool(os.environ.get("PYPROJ_GLOBAL_CONTEXT", "OFF"))
 # static user data directory to prevent core dumping
 # see: https://github.com/pyproj4/pyproj/issues/678
 cdef const char* _USER_DATA_DIR = proj_context_get_user_writable_directory(NULL, False)
-
-
-IF (CTE_PROJ_VERSION_MAJOR, CTE_PROJ_VERSION_MINOR) >= (8, 1):
-    cdef void proj_context_set_autoclose_database(PJ_CONTEXT *ctx,
-                                                  int autoclose):
-        # THIS METHOD IS DEPRECATED IN PROJ 8.1
-        # https://github.com/OSGeo/PROJ/pull/2738
-        pass
-
-ELSE:
-    cdef extern from "proj.h":
-        void proj_context_set_autoclose_database(PJ_CONTEXT *ctx,
-                                                 int autoclose)
-
+# Store the message from any internal PROJ errors
+cdef str _INTERNAL_PROJ_ERROR = None
 
 def set_use_global_context(active=None):
     """
@@ -61,7 +49,6 @@ def set_use_global_context(active=None):
     if active is None:
         active = strtobool(os.environ.get("PYPROJ_GLOBAL_CONTEXT", "OFF"))
     _USE_GLOBAL_CONTEXT = bool(active)
-    proj_context_set_autoclose_database(PYPROJ_GLOBAL_CONTEXT, not _USE_GLOBAL_CONTEXT)
 
 
 def get_user_data_dir(create=False):
@@ -69,6 +56,8 @@ def get_user_data_dir(create=False):
     .. versionadded:: 3.0.0
 
     Get the PROJ user writable directory for datumgrid files.
+
+    See: :c:func:`proj_context_get_user_writable_directory`
 
     This is where grids will be downloaded when
     :ref:`PROJ network <network>` capabilities
@@ -90,6 +79,21 @@ def get_user_data_dir(create=False):
     )
 
 
+cpdef str _get_proj_error():
+    """
+    Get the internal PROJ error message. Returns None if no error was set.
+    """
+    return _INTERNAL_PROJ_ERROR
+
+
+cpdef void _clear_proj_error():
+    """
+    Clear the internal PROJ error message.
+    """
+    global _INTERNAL_PROJ_ERROR
+    _INTERNAL_PROJ_ERROR = None
+
+
 cdef void pyproj_log_function(void *user_data, int level, const char *error_msg) nogil:
     """
     Log function for catching PROJ errors.
@@ -99,8 +103,9 @@ cdef void pyproj_log_function(void *user_data, int level, const char *error_msg)
     # PROJ_DEBUG environment variable.
     if level == PJ_LOG_ERROR:
         with gil:
-            ProjError.internal_proj_error = error_msg
-            _LOGGER.debug(f"PROJ_ERROR: {ProjError.internal_proj_error}")
+            global _INTERNAL_PROJ_ERROR
+            _INTERNAL_PROJ_ERROR = error_msg
+            _LOGGER.debug(f"PROJ_ERROR: {_INTERNAL_PROJ_ERROR}")
     elif level == PJ_LOG_DEBUG:
         with gil:
             _LOGGER.debug(f"PROJ_DEBUG: {error_msg}")
@@ -142,7 +147,6 @@ cdef void pyproj_context_initialize(PJ_CONTEXT* context) except *:
     """
     proj_log_func(context, NULL, pyproj_log_function)
     proj_context_use_proj4_init_rules(context, 1)
-    proj_context_set_autoclose_database(context, not _USE_GLOBAL_CONTEXT)
     set_context_data_dir(context)
 
 

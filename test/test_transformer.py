@@ -1,6 +1,8 @@
 import concurrent.futures
 import os
+import pickle
 from array import array
+from contextlib import nullcontext
 from functools import partial
 from glob import glob
 from itertools import permutations
@@ -18,8 +20,8 @@ from pyproj.enums import TransformDirection
 from pyproj.exceptions import ProjError
 from pyproj.transformer import AreaOfInterest, TransformerGroup
 from test.conftest import (
-    PROJ_GTE_8,
-    PROJ_GTE_81,
+    PROJ_GTE_91,
+    PROJ_GTE_92,
     grids_available,
     proj_env,
     proj_network_env,
@@ -33,7 +35,7 @@ def test_tranform_wgs84_to_custom():
     )
     wgs84 = pyproj.Proj("+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs")
     lat, lon = 51.04715, 3.23406
-    with pytest.warns(DeprecationWarning):
+    with pytest.warns(FutureWarning):
         xx, yy = pyproj.transform(wgs84, custom_proj, lon, lat)
     assert f"{xx:.3f} {yy:.3f}" == "212.623 4604.975"
 
@@ -44,7 +46,7 @@ def test_transform_wgs84_to_alaska():
         lat_lon_proj = pyproj.Proj(init="epsg:4326", preserve_units=False)
         alaska_aea_proj = pyproj.Proj(init="epsg:2964", preserve_units=False)
     test = (-179.72638, 49.752533)
-    with pytest.warns(DeprecationWarning):
+    with pytest.warns(FutureWarning):
         xx, yy = pyproj.transform(lat_lon_proj, alaska_aea_proj, *test)
     if grids_available("us_noaa_alaska.tif"):
         assert f"{xx:.3f} {yy:.3f}" == "-1824924.495 330822.800"
@@ -52,19 +54,19 @@ def test_transform_wgs84_to_alaska():
         assert f"{xx:.3f} {yy:.3f}" == "-1825155.697 330730.391"
 
 
-@pytest.mark.skipif(PROJ_GTE_8, reason="https://github.com/OSGeo/PROJ/issues/2425")
+@pytest.mark.skip(reason="https://github.com/OSGeo/PROJ/issues/2425")
 def test_illegal_transformation():
     # issue 202
     with pytest.warns(FutureWarning):
         p1 = pyproj.Proj(init="epsg:4326")
         p2 = pyproj.Proj(init="epsg:3857")
-    with pytest.warns(DeprecationWarning):
+    with pytest.warns(FutureWarning):
         xx, yy = pyproj.transform(
             p1, p2, (-180, -180, 180, 180, -180), (-90, 90, 90, -90, -90)
         )
     assert np.all(np.isinf(xx))
     assert np.all(np.isinf(yy))
-    with pytest.warns(DeprecationWarning), pytest.raises(ProjError):
+    with pytest.warns(FutureWarning), pytest.raises(ProjError):
         pyproj.transform(
             p1, p2, (-180, -180, 180, 180, -180), (-90, 90, 90, -90, -90), errcheck=True
         )
@@ -79,58 +81,65 @@ def test_lambert_conformal_transform():
     E = 567623.931
     N = 256422.787
     h = 1341.467
-    with pytest.warns(DeprecationWarning):
+    with pytest.warns(FutureWarning):
         Long1, Lat1, H1 = pyproj.transform(Midelt, WGS84, E, N, h, radians=False)
     assert_almost_equal((Long1, Lat1, H1), (-4.6753456, 32.902199, 1341.467), decimal=5)
 
 
-def test_equivalent_crs():
-    with pytest.warns(DeprecationWarning):
-        Transformer.from_crs("epsg:4326", 4326, skip_equivalent=True)
-
-
-def test_equivalent_proj():
-    with pytest.warns(FutureWarning):
-        proj_from = pyproj.Proj("+init=epsg:4326")
-    with pytest.warns(DeprecationWarning):
-        Transformer.from_proj(proj_from, 4326, skip_equivalent=True)
-
-
-def test_equivalent_transformer_group():
-    with pytest.warns(DeprecationWarning):
-        TransformerGroup("epsg:4326", 4326, skip_equivalent=True)
-
-
-def test_4d_transform():
+def test_4d_transform(scalar_and_array):
     transformer = Transformer.from_pipeline("+init=ITRF2008:ITRF2000")
     assert_almost_equal(
         transformer.transform(
-            xx=3513638.19380, yy=778956.45250, zz=5248216.46900, tt=2008.75
+            xx=scalar_and_array(3513638.19380),
+            yy=scalar_and_array(778956.45250),
+            zz=scalar_and_array(5248216.46900),
+            tt=scalar_and_array(2008.75),
         ),
-        (3513638.1999428216, 778956.4532640711, 5248216.453456361, 2008.75),
+        (
+            scalar_and_array(3513638.1999428216),
+            scalar_and_array(778956.4532640711),
+            scalar_and_array(5248216.453456361),
+            scalar_and_array(2008.75),
+        ),
     )
 
 
-def test_2d_with_time_transform():
+def test_2d_with_time_transform(scalar_and_array):
     transformer = Transformer.from_pipeline("+init=ITRF2008:ITRF2000")
     assert_almost_equal(
-        transformer.transform(xx=3513638.19380, yy=778956.45250, tt=2008.75),
-        (3513638.1999428216, 778956.4532640711, 2008.75),
+        transformer.transform(
+            xx=scalar_and_array(3513638.19380),
+            yy=scalar_and_array(778956.45250),
+            tt=scalar_and_array(2008.75),
+        ),
+        (
+            scalar_and_array(3513638.1999428216),
+            scalar_and_array(778956.4532640711),
+            scalar_and_array(2008.75),
+        ),
     )
 
 
-def test_4d_transform_crs_obs1():
+def test_4d_transform_crs_obs1(scalar_and_array):
     transformer = Transformer.from_proj(7789, 8401)
     assert_almost_equal(
         transformer.transform(
-            xx=3496737.2679, yy=743254.4507, zz=5264462.9620, tt=2019.0
+            xx=scalar_and_array(3496737.2679),
+            yy=scalar_and_array(743254.4507),
+            zz=scalar_and_array(5264462.9620),
+            tt=scalar_and_array(2019.0),
         ),
-        (3496737.757717311, 743253.9940103051, 5264462.701132784, 2019.0),
+        (
+            scalar_and_array(3496737.757717311),
+            scalar_and_array(743253.9940103051),
+            scalar_and_array(5264462.701132784),
+            scalar_and_array(2019.0),
+        ),
     )
 
 
 def test_4d_transform_orginal_crs_obs1():
-    with pytest.warns(DeprecationWarning):
+    with pytest.warns(FutureWarning):
         assert_almost_equal(
             transform(
                 7789, 8401, x=3496737.2679, y=743254.4507, z=5264462.9620, tt=2019.0
@@ -139,26 +148,42 @@ def test_4d_transform_orginal_crs_obs1():
         )
 
 
-def test_4d_transform_crs_obs2():
+def test_4d_transform_crs_obs2(scalar_and_array):
     transformer = Transformer.from_proj(4896, 7930)
     assert_almost_equal(
         transformer.transform(
-            xx=3496737.2679, yy=743254.4507, zz=5264462.9620, tt=2019.0
+            xx=scalar_and_array(3496737.2679),
+            yy=scalar_and_array(743254.4507),
+            zz=scalar_and_array(5264462.9620),
+            tt=scalar_and_array(2019.0),
         ),
-        (3496737.7857162016, 743254.0394113371, 5264462.643659916, 2019.0),
+        (
+            scalar_and_array(3496737.7857162016),
+            scalar_and_array(743254.0394113371),
+            scalar_and_array(5264462.643659916),
+            scalar_and_array(2019.0),
+        ),
     )
 
 
-def test_2d_with_time_transform_crs_obs2():
+def test_2d_with_time_transform_crs_obs2(scalar_and_array):
     transformer = Transformer.from_proj(4896, 7930)
     assert_almost_equal(
-        transformer.transform(xx=3496737.2679, yy=743254.4507, tt=2019.0),
-        (3496737.4105305015, 743254.1014318303, 2019.0),
+        transformer.transform(
+            xx=scalar_and_array(3496737.2679),
+            yy=scalar_and_array(743254.4507),
+            tt=scalar_and_array(2019.0),
+        ),
+        (
+            scalar_and_array(3496737.4105305015),
+            scalar_and_array(743254.1014318303),
+            scalar_and_array(2019.0),
+        ),
     )
 
 
 def test_2d_with_time_transform_original_crs_obs2():
-    with pytest.warns(DeprecationWarning):
+    with pytest.warns(FutureWarning):
         assert_almost_equal(
             transform(4896, 7930, x=3496737.2679, y=743254.4507, tt=2019.0),
             (3496737.4105305015, 743254.1014318303, 2019.0),
@@ -190,7 +215,7 @@ def test_3d_time_itransform():
 
 
 def test_4d_itransform_orginal_crs_obs1():
-    with pytest.warns(DeprecationWarning):
+    with pytest.warns(FutureWarning):
         assert_almost_equal(
             list(
                 itransform(
@@ -202,7 +227,7 @@ def test_4d_itransform_orginal_crs_obs1():
 
 
 def test_2d_with_time_itransform_original_crs_obs2():
-    with pytest.warns(DeprecationWarning):
+    with pytest.warns(FutureWarning):
         assert_almost_equal(
             list(
                 itransform(
@@ -214,8 +239,7 @@ def test_2d_with_time_itransform_original_crs_obs2():
 
 
 def test_itransform_time_3rd_invalid():
-
-    with pytest.warns(DeprecationWarning), pytest.raises(
+    with pytest.warns(FutureWarning), pytest.raises(
         ValueError, match="'time_3rd' is only valid for 3 coordinates."
     ):
         list(
@@ -226,7 +250,7 @@ def test_itransform_time_3rd_invalid():
                 time_3rd=True,
             )
         )
-    with pytest.warns(DeprecationWarning), pytest.raises(
+    with pytest.warns(FutureWarning), pytest.raises(
         ValueError, match="'time_3rd' is only valid for 3 coordinates."
     ):
         list(itransform(7789, 8401, [(3496737.2679, 743254.4507)], time_3rd=True))
@@ -236,7 +260,7 @@ def test_transform_no_error():
     with pytest.warns(FutureWarning):
         pj = Proj(init="epsg:4555")
     pjx, pjy = pj(116.366, 39.867)
-    with pytest.warns(DeprecationWarning):
+    with pytest.warns(FutureWarning):
         transform(pj, Proj(4326), pjx, pjy, radians=True, errcheck=True)
 
 
@@ -244,7 +268,7 @@ def test_itransform_no_error():
     with pytest.warns(FutureWarning):
         pj = Proj(init="epsg:4555")
     pjx, pjy = pj(116.366, 39.867)
-    with pytest.warns(DeprecationWarning):
+    with pytest.warns(FutureWarning):
         list(itransform(pj, Proj(4326), [(pjx, pjy)], radians=True, errcheck=True))
 
 
@@ -256,18 +280,20 @@ def test_transform_no_exception():
     transformer.itransform([(1.716073972, 52.658007833)], errcheck=True)
 
 
-def test_transform__out_of_bounds():
+def test_transform__out_of_bounds(scalar_and_array):
     with pytest.warns(FutureWarning):
         transformer = Transformer.from_proj("+init=epsg:4326", "+init=epsg:27700")
     with pytest.raises(pyproj.exceptions.ProjError):
-        transformer.transform(100000, 100000, errcheck=True)
+        transformer.transform(
+            scalar_and_array(100000), scalar_and_array(100000), errcheck=True
+        )
 
 
 def test_transform_radians():
     with pytest.warns(FutureWarning):
         WGS84 = pyproj.Proj("+init=EPSG:4326")
     ECEF = pyproj.Proj(proj="geocent", ellps="WGS84", datum="WGS84")
-    with pytest.warns(DeprecationWarning):
+    with pytest.warns(FutureWarning):
         assert_almost_equal(
             pyproj.transform(
                 ECEF, WGS84, -2704026.010, -4253051.810, 3895878.820, radians=True
@@ -292,7 +318,7 @@ def test_itransform_radians():
     with pytest.warns(FutureWarning):
         WGS84 = pyproj.Proj("+init=EPSG:4326")
     ECEF = pyproj.Proj(proj="geocent", ellps="WGS84", datum="WGS84")
-    with pytest.warns(DeprecationWarning):
+    with pytest.warns(FutureWarning):
         assert_almost_equal(
             list(
                 pyproj.itransform(
@@ -318,43 +344,60 @@ def test_itransform_radians():
         )
 
 
-def test_4d_transform__inverse():
+def test_4d_transform__inverse(scalar_and_array):
     transformer = Transformer.from_pipeline("+init=ITRF2008:ITRF2000")
     assert_almost_equal(
         transformer.transform(
-            xx=3513638.1999428216,
-            yy=778956.4532640711,
-            zz=5248216.453456361,
-            tt=2008.75,
+            xx=scalar_and_array(3513638.1999428216),
+            yy=scalar_and_array(778956.4532640711),
+            zz=scalar_and_array(5248216.453456361),
+            tt=scalar_and_array(2008.75),
             direction=TransformDirection.INVERSE,
         ),
-        (3513638.19380, 778956.45250, 5248216.46900, 2008.75),
+        (
+            scalar_and_array(3513638.19380),
+            scalar_and_array(778956.45250),
+            scalar_and_array(5248216.46900),
+            scalar_and_array(2008.75),
+        ),
     )
 
 
-def test_transform_direction():
+def test_transform_direction(scalar_and_array):
     forward_transformer = Transformer.from_crs(4326, 3857)
     inverse_transformer = Transformer.from_crs(3857, 4326)
-    assert inverse_transformer.transform(
-        -33, 24, direction=TransformDirection.INVERSE
-    ) == forward_transformer.transform(-33, 24)
+    assert_array_equal(
+        inverse_transformer.transform(
+            scalar_and_array(-33),
+            scalar_and_array(24),
+            direction=TransformDirection.INVERSE,
+        ),
+        forward_transformer.transform(scalar_and_array(-33), scalar_and_array(24)),
+    )
     ident_transformer = Transformer.from_crs(4326, 3857)
-    ident_transformer.transform(-33, 24, direction=TransformDirection.IDENT) == (
-        -33,
-        24,
+    assert_array_equal(
+        ident_transformer.transform(
+            scalar_and_array(-33),
+            scalar_and_array(24),
+            direction=TransformDirection.IDENT,
+        ),
+        (scalar_and_array(-33), scalar_and_array(24)),
     )
 
 
-def test_always_xy__transformer():
+def test_always_xy__transformer(scalar_and_array):
     transformer = Transformer.from_crs(2193, 4326, always_xy=True)
     assert_almost_equal(
-        transformer.transform(1625350, 5504853),
-        (173.29964730317386, -40.60674802693758),
+        transformer.transform(scalar_and_array(1625350), scalar_and_array(5504853)),
+        (
+            scalar_and_array(173.29964730317386),
+            scalar_and_array(-40.60674802693758),
+        ),
     )
 
 
 def test_always_xy__transform():
-    with pytest.warns(DeprecationWarning):
+    with pytest.warns(FutureWarning):
         assert_almost_equal(
             transform(2193, 4326, 1625350, 5504853, always_xy=True),
             (173.29964730317386, -40.60674802693758),
@@ -362,7 +405,7 @@ def test_always_xy__transform():
 
 
 def test_always_xy__itransform():
-    with pytest.warns(DeprecationWarning):
+    with pytest.warns(FutureWarning):
         assert_almost_equal(
             list(itransform(2193, 4326, [(1625350, 5504853)], always_xy=True)),
             [(173.29964730317386, -40.60674802693758)],
@@ -386,30 +429,52 @@ def test_transform_empty_array_xyzt(empty_array):
     )
 
 
-def test_transform_direction__string():
+def test_transform_direction__string(scalar_and_array):
     forward_transformer = Transformer.from_crs(4326, 3857)
     inverse_transformer = Transformer.from_crs(3857, 4326)
-    assert inverse_transformer.transform(
-        -33, 24, direction="INVERSE"
-    ) == forward_transformer.transform(-33, 24, direction="FORWARD")
+    assert_array_equal(
+        inverse_transformer.transform(
+            scalar_and_array(-33), scalar_and_array(24), direction="INVERSE"
+        ),
+        forward_transformer.transform(
+            scalar_and_array(-33), scalar_and_array(24), direction="FORWARD"
+        ),
+    )
     ident_transformer = Transformer.from_crs(4326, 3857)
-    ident_transformer.transform(-33, 24, direction="IDENT") == (-33, 24)
+    assert_array_equal(
+        ident_transformer.transform(
+            scalar_and_array(-33), scalar_and_array(24), direction="IDENT"
+        ),
+        (scalar_and_array(-33), scalar_and_array(24)),
+    )
 
 
-def test_transform_direction__string_lowercase():
+def test_transform_direction__string_lowercase(scalar_and_array):
     forward_transformer = Transformer.from_crs(4326, 3857)
     inverse_transformer = Transformer.from_crs(3857, 4326)
-    assert inverse_transformer.transform(
-        -33, 24, direction="inverse"
-    ) == forward_transformer.transform(-33, 24, direction="forward")
+    assert_array_equal(
+        inverse_transformer.transform(
+            scalar_and_array(-33), scalar_and_array(24), direction="inverse"
+        ),
+        forward_transformer.transform(
+            scalar_and_array(-33), scalar_and_array(24), direction="forward"
+        ),
+    )
     ident_transformer = Transformer.from_crs(4326, 3857)
-    ident_transformer.transform(-33, 24, direction="ident") == (-33, 24)
+    assert_array_equal(
+        ident_transformer.transform(
+            scalar_and_array(-33), scalar_and_array(24), direction="ident"
+        ),
+        (scalar_and_array(-33), scalar_and_array(24)),
+    )
 
 
-def test_transform_direction__invalid():
+def test_transform_direction__invalid(scalar_and_array):
     transformer = Transformer.from_crs(4326, 3857)
     with pytest.raises(ValueError, match="Invalid value"):
-        transformer.transform(-33, 24, direction="WHEREVER")
+        transformer.transform(
+            scalar_and_array(-33), scalar_and_array(24), direction="WHEREVER"
+        )
 
 
 def test_from_pipeline__non_transform_input():
@@ -456,101 +521,42 @@ def test_str():
     assert str(Transformer.from_crs(4326, 3857)).startswith("proj=pipeline")
 
 
-if PROJ_GTE_81:
-    _BOUND_REPR = "(-16.1, 32.88, 40.18, 84.73)"
-elif PROJ_GTE_8:
-    _BOUND_REPR = (
-        "(-16.096100515106, 32.884955146013, 40.178745269776, 84.722623821813)"
+def test_repr():
+    assert repr(Transformer.from_crs(4326, 3857)) == (
+        "<Conversion Transformer: pipeline>\n"
+        "Description: Popular Visualisation Pseudo-Mercator\n"
+        "Area of Use:\n"
+        "- name: World.\n"
+        "- bounds: (-180.0, -90.0, 180.0, 90.0)"
     )
-else:
-    _BOUND_REPR = "(-16.1, 32.88, 40.18, 84.17)"
-
-
-@pytest.mark.parametrize(
-    "from_crs, to_crs, expected_repr",
-    [
-        (
-            7789,
-            8401,
-            (
-                "<Transformation Transformer: helmert>\n"
-                "Description: ITRF2014 to ETRF2014 (2)\n"
-                "Area of Use:\n"
-                "- name: Europe - onshore and offshore: Albania; Andorra; Austria; "
-                "Belgium; Bosnia and Herzegovina; Bulgaria; Croatia; Cyprus; Czechia; "
-                "Denmark; Estonia; Faroe Islands; Finland; France; Germany; Gibraltar; "
-                "Greece; Hungary; Ireland; Italy; Kosovo; Latvia; Liechtenstein; "
-                "Lithuania; Luxembourg; Malta; Moldova; Monaco; Montenegro; "
-                "Netherlands; North Macedonia; "
-                "Norway including Svalbard and Jan Mayen; "
-                "Poland; Portugal; Romania; San Marino; Serbia; Slovakia; Slovenia; "
-                "Spain; Sweden; Switzerland; "
-                "United Kingdom (UK) including Channel Islands and Isle of Man; "
-                "Vatican City State.\n"
-                f"- bounds: {_BOUND_REPR}"
-            ),
-        ),
-        (
-            4326,
-            3857,
-            (
-                "<Conversion Transformer: pipeline>\n"
-                "Description: Popular Visualisation Pseudo-Mercator\n"
-                "Area of Use:\n"
-                "- name: World.\n"
-                "- bounds: (-180.0, -90.0, 180.0, 90.0)"
-            ),
-        ),
-    ],
-)
-def test_repr(from_crs, to_crs, expected_repr):
-    assert repr(Transformer.from_crs(from_crs, to_crs)) == expected_repr
 
 
 @pytest.mark.grid
 def test_repr__conditional():
-    trans_repr = repr(Transformer.from_crs(4326, 26917))
-    if grids_available(
-        "ca_nrc_NA83SCRS.tif",
-        "us_noaa_FL.tif",
-        "us_noaa_MD.tif",
-        "us_noaa_TN.tif",
-        "us_noaa_gahpgn.tif",
-        "us_noaa_kyhpgn.tif",
-        "us_noaa_mihpgn.tif",
-        "us_noaa_nchpgn.tif",
-        "us_noaa_nyhpgn.tif",
-        "us_noaa_ohhpgn.tif",
-        "us_noaa_pahpgn.tif",
-        "us_noaa_schpgn.tif",
-        "us_noaa_vahpgn.tif",
-        "us_noaa_wvhpgn.tif",
-    ):
+    trans_repr = repr(Transformer.from_crs("EPSG:4326+3855", "EPSG:4979"))
+    if grids_available("us_nga_egm08_25.tif"):
         assert trans_repr == (
             "<Unknown Transformer: unknown>\n"
             "Description: unavailable until proj_trans is called\n"
             "Area of Use:\n- undefined"
         )
+    elif PROJ_GTE_92:
+        assert trans_repr == (
+            "<Unknown Transformer: noop>\n"
+            "Description: Transformation from EGM2008 height to WGS 84 "
+            "(ballpark vertical transformation, without ellipsoid height "
+            "to vertical height correction)\n"
+            "Area of Use:\n- undefined"
+        )
     else:
         assert trans_repr == (
-            "<Concatenated Operation Transformer: pipeline>\n"
-            "Description: Inverse of NAD83 to WGS 84 (1) + UTM zone 17N\n"
+            "<Other Coordinate Operation Transformer: noop>\n"
+            "Description: Transformation from EGM2008 height to WGS 84 "
+            "(ballpark vertical transformation, without ellipsoid height "
+            "to vertical height correction)\n"
             "Area of Use:\n"
-            "- name: North America - onshore and offshore: Canada - Alberta;"
-            " British Columbia; Manitoba; New Brunswick; "
-            "Newfoundland and Labrador; Northwest Territories; "
-            "Nova Scotia; Nunavut; Ontario; Prince Edward Island; Quebec; "
-            "Saskatchewan; Yukon. United States (USA) - Alabama; "
-            "Alaska (mainland); Arizona; Arkansas; California; Colorado; "
-            "Connecticut; Delaware; Florida; Georgia; Idaho; Illinois; "
-            "Indiana; Iowa; Kansas; Kentucky; Louisiana; Maine; Maryland; "
-            "Massachusetts; Michigan; Minnesota; Mississippi; Missouri; "
-            "Montana; Nebraska; Nevada; New Hampshire; New Jersey; "
-            "New Mexico; New York; North Carolina; North Dakota; Ohio; "
-            "Oklahoma; Oregon; Pennsylvania; Rhode Island; South Carolina; "
-            "South Dakota; Tennessee; Texas; Utah; Vermont; Virginia; "
-            "Washington; West Virginia; Wisconsin; Wyoming.\n"
-            "- bounds: (-172.54, 23.81, -47.74, 86.46)"
+            "- name: World\n"
+            "- bounds: (-180.0, -90.0, 180.0, 90.0)"
         )
 
 
@@ -608,6 +614,20 @@ def test_transformer__operations__scope_remarks():
         "Scale",
         "Grid",
     ]
+
+
+@pytest.mark.grid
+def test_transformer__only_best():
+    with nullcontext() if PROJ_GTE_92 else pytest.raises(
+        NotImplementedError, match="only_best requires PROJ 9.2"
+    ):
+        transformer = Transformer.from_crs(4326, 2964, only_best=True)
+        if not grids_available("ca_nrc_ntv2_0.tif"):
+            with pytest.raises(
+                ProjError,
+                match="Grid ca_nrc_ntv2_0.tif is not available.",
+            ):
+                transformer.transform(60, -100, errcheck=True)
 
 
 def test_transformer_group():
@@ -680,7 +700,7 @@ def test_transform_group__missing_best():
         assert "ntv2_0" not in trans_group.transformers[0].definition
         assert "ntv2_0" in trans_group.unavailable_operations[0].to_proj4()
     else:
-        # assuming all grids avaiable or PROJ_NETWORK=ON
+        # assuming all grids available or PROJ_NETWORK=ON
         trans_group = pyproj.transformer.TransformerGroup(
             lat_lon_proj.crs, alaska_aea_proj.crs
         )
@@ -721,40 +741,43 @@ def test_transform_group__area_of_interest():
 @pytest.mark.grid
 def test_transformer_group__get_transform_crs():
     tg = TransformerGroup("epsg:4258", "epsg:7415")
-    if not grids_available("nl_nsgi_rdtrans2018.tif"):
-        assert len(tg.transformers) == 1
-    else:
+    if grids_available(
+        "nl_nsgi_nlgeo2018.tif", "nl_nsgi_rdtrans2018.tif", check_all=True
+    ):
+        if PROJ_GTE_91:
+            assert len(tg.transformers) == 2
+        else:
+            assert len(tg.transformers) == 6
+    elif not PROJ_GTE_91 and grids_available("nl_nsgi_rdtrans2018.tif"):
         assert len(tg.transformers) == 2
+    elif not PROJ_GTE_91 and grids_available("nl_nsgi_nlgeo2018.tif"):
+        assert len(tg.transformers) == 4
+    else:
+        assert len(tg.transformers) == 1
 
 
-@pytest.mark.grid
 def test_transformer__area_of_interest():
     transformer = Transformer.from_crs(
-        4326, 2964, area_of_interest=AreaOfInterest(-136.46, 49.0, -60.72, 83.17)
+        "EPSG:7789",
+        "EPSG:4936",
+        area_of_interest=AreaOfInterest(-177.25, -44.64, -43.3, -175.54),
     )
-    if not grids_available("ca_nrc_ntv2_0.tif"):
-        assert (
-            transformer.description == "Inverse of NAD27 to WGS 84 (13) + Alaska Albers"
-        )
-    else:
-        assert (
-            transformer.description == "Inverse of NAD27 to WGS 84 (33) + Alaska Albers"
-        )
+    assert (
+        transformer.description
+        == "Ballpark geocentric translation from ITRF2014 to ETRS89"
+    )
 
 
-@pytest.mark.grid
 def test_transformer_proj__area_of_interest():
     transformer = Transformer.from_proj(
-        4326, 2964, area_of_interest=AreaOfInterest(-136.46, 49.0, -60.72, 83.17)
+        "EPSG:7789",
+        "EPSG:4936",
+        area_of_interest=AreaOfInterest(-177.25, -44.64, -43.3, -175.54),
     )
-    if not grids_available("ca_nrc_ntv2_0.tif"):
-        assert (
-            transformer.description == "Inverse of NAD27 to WGS 84 (13) + Alaska Albers"
-        )
-    else:
-        assert (
-            transformer.description == "Inverse of NAD27 to WGS 84 (33) + Alaska Albers"
-        )
+    assert (
+        transformer.description
+        == "Ballpark geocentric translation from ITRF2014 to ETRS89"
+    )
 
 
 def test_transformer__area_of_interest__invalid():
@@ -1119,19 +1142,11 @@ def test_transformer_multithread__crs():
             pass
 
 
-@pytest.mark.skipif(not PROJ_GTE_8, reason="Requires PROJ 8+")
 def test_transformer_accuracy_filter():
     with pytest.raises(ProjError):
         Transformer.from_crs("EPSG:4326", "EPSG:4258", accuracy=0.05)
 
 
-@pytest.mark.skipif(PROJ_GTE_8, reason="Warning for PROJ<8")
-def test_transformer_accuracy_filter_warning():
-    with pytest.warns(UserWarning, match="accuracy requires PROJ 8+"):
-        Transformer.from_crs("EPSG:4326", "EPSG:4258", accuracy=0.05)
-
-
-@pytest.mark.skipif(not PROJ_GTE_8, reason="Requires PROJ 8+")
 def test_transformer_allow_ballpark_filter():
     with pytest.raises(ProjError):
         Transformer.from_crs(
@@ -1139,34 +1154,23 @@ def test_transformer_allow_ballpark_filter():
         )
 
 
-@pytest.mark.skipif(PROJ_GTE_8, reason="Warning for PROJ<8")
-def test_transformer_allow_ballpark_filter_warning():
-    with pytest.warns(UserWarning, match="allow_ballpark requires PROJ 8+"):
-        Transformer.from_crs("EPSG:4326", "EPSG:4258", allow_ballpark=False)
-
-
-@pytest.mark.skipif(not PROJ_GTE_8, reason="Requires PROJ 8+")
 def test_transformer_authority_filter():
     transformer = Transformer.from_crs("EPSG:4326", "EPSG:4258", authority="PROJ")
     assert transformer.description == "Ballpark geographic offset from WGS 84 to ETRS89"
-
-
-@pytest.mark.skipif(PROJ_GTE_8, reason="Warning for PROJ<8")
-def test_transformer_authority_filter_warning():
-    with pytest.warns(UserWarning, match="authority requires PROJ 8+"):
-        Transformer.from_crs("EPSG:4326", "EPSG:4258", authority="PROJ")
 
 
 @pytest.mark.parametrize(
     "input_string",
     [
         "EPSG:1671",
-        "RGF93 to WGS 84 (1)",
+        "RGF93 v1 to WGS 84 (1)",
         "urn:ogc:def:coordinateOperation:EPSG::1671",
     ],
 )
 def test_transformer_from_pipeline__input_types(input_string):
-    assert Transformer.from_pipeline(input_string).description == "RGF93 to WGS 84 (1)"
+    assert (
+        Transformer.from_pipeline(input_string).description == "RGF93 v1 to WGS 84 (1)"
+    )
 
 
 @pytest.mark.parametrize(
@@ -1184,7 +1188,7 @@ def test_transformer_from_pipeline__wkt_json(method_name):
                 method_name,
             )()
         ).description
-        == "RGF93 to WGS 84 (1)"
+        == "RGF93 v1 to WGS 84 (1)"
     )
 
 
@@ -1328,18 +1332,42 @@ def test_transform_bounds__beyond_global_bounds():
 
 
 @pytest.mark.parametrize(
-    "input_crs,expected_bounds",
+    "input_crs,input_bounds,expected_bounds",
     [
-        ("ESRI:102036", (0, -89178008, 0, 0)),
-        ("ESRI:54026", (0, -179545824, 0, 179545824)),
+        (
+            "ESRI:102036",
+            (-180.0, -90.0, 180.0, 1.3 if PROJ_GTE_92 else 0),
+            (0, -116576599 if PROJ_GTE_92 else -89178008, 0, 0),
+        ),
+        ("ESRI:54026", (-180.0, -90.0, 180.0, 90.0), (0, -179545824, 0, 179545824)),
     ],
 )
-def test_transform_bounds__ignore_inf(input_crs, expected_bounds):
+def test_transform_bounds__ignore_inf(input_crs, input_bounds, expected_bounds):
     crs = CRS(input_crs)
     transformer = Transformer.from_crs(crs.geodetic_crs, crs, always_xy=True)
     assert_almost_equal(
-        transformer.transform_bounds(*crs.area_of_use.bounds),
+        transformer.transform_bounds(*input_bounds),
         expected_bounds,
+        decimal=0,
+    )
+
+
+def test_transform_bounds__ignore_inf_geographic():
+    crs_wkt = (
+        'PROJCS["Interrupted_Goode_Homolosine",'
+        'GEOGCS["GCS_unnamed ellipse",DATUM["D_unknown",'
+        'SPHEROID["Unknown",6378137,298.257223563]],'
+        'PRIMEM["Greenwich",0],UNIT["Degree",0.0174532925199433]],'
+        'PROJECTION["Interrupted_Goode_Homolosine"],'
+        'UNIT["metre",1,AUTHORITY["EPSG","9001"]],'
+        'AXIS["Easting",EAST],AXIS["Northing",NORTH]]'
+    )
+    transformer = Transformer.from_crs(crs_wkt, "EPSG:4326", always_xy=True)
+    assert_almost_equal(
+        transformer.transform_bounds(
+            left=-15028000.0, bottom=7515000.0, right=-14975000.0, top=7556000.0
+        ),
+        (-179.2133, 70.9345, -177.9054, 71.4364),
         decimal=0,
     )
 
@@ -1350,6 +1378,82 @@ def test_transform_bounds__noop_geographic():
     assert_almost_equal(
         transformer.transform_bounds(*crs.area_of_use.bounds),
         crs.area_of_use.bounds,
+    )
+
+
+def test_transform_bounds__north_pole():
+    crs = CRS("EPSG:32661")
+    transformer = Transformer.from_crs(crs, "EPSG:4326")
+    minx, miny, maxx, maxy = crs.area_of_use.bounds
+    bounds = transformer.transform_bounds(miny, minx, maxy, maxx, direction="INVERSE")
+    assert_almost_equal(
+        bounds,
+        (
+            -1405880.72,
+            -1371213.76,
+            5405880.72,
+            5371213.76,
+        ),
+        decimal=0,
+    )
+    assert_almost_equal(
+        transformer.transform_bounds(*bounds),
+        (48.656, -180.0, 90.0, 180.0),
+        decimal=0,
+    )
+
+
+def test_transform_bounds__north_pole__xy():
+    crs = CRS("EPSG:32661")
+    transformer = Transformer.from_crs(crs, "EPSG:4326", always_xy=True)
+    bounds = transformer.transform_bounds(*crs.area_of_use.bounds, direction="INVERSE")
+    assert_almost_equal(
+        bounds,
+        (-1371213.76, -1405880.72, 5371213.76, 5405880.72),
+        decimal=0,
+    )
+    assert_almost_equal(
+        transformer.transform_bounds(*bounds),
+        (-180.0, 48.656, 180.0, 90.0),
+        decimal=0,
+    )
+
+
+def test_transform_bounds__south_pole():
+    crs = CRS("EPSG:32761")
+    transformer = Transformer.from_crs(crs, "EPSG:4326")
+    minx, miny, maxx, maxy = crs.area_of_use.bounds
+    bounds = transformer.transform_bounds(miny, minx, maxy, maxx, direction="INVERSE")
+    assert_almost_equal(
+        bounds,
+        (
+            -1405880.72,
+            -1371213.76,
+            5405880.72,
+            5371213.76,
+        ),
+        decimal=0,
+    )
+    assert_almost_equal(
+        transformer.transform_bounds(*bounds),
+        (-90, -180.0, -48.656, 180.0),
+        decimal=0,
+    )
+
+
+def test_transform_bounds__south_pole__xy():
+    crs = CRS("EPSG:32761")
+    transformer = Transformer.from_crs(crs, "EPSG:4326", always_xy=True)
+    bounds = transformer.transform_bounds(*crs.area_of_use.bounds, direction="INVERSE")
+    assert_almost_equal(
+        bounds,
+        (-1371213.76, -1405880.72, 5371213.76, 5405880.72),
+        decimal=0,
+    )
+    assert_almost_equal(
+        transformer.transform_bounds(*bounds),
+        (-180.0, -90.0, 180.0, -48.656),
+        decimal=0,
     )
 
 
@@ -1449,3 +1553,130 @@ def test_4d_transform__inplace__numpy__int():
     assert zarr[0] == 5264462
     assert tarr is not t_tarr
     assert tarr[0] == 2019
+
+
+def test_transformer_source_target_crs():
+    transformer = Transformer.from_crs("EPSG:4326", "EPSG:4258")
+    assert transformer.source_crs == "EPSG:4326"
+    assert transformer.target_crs == "EPSG:4258"
+
+
+def test_transformer_source_target_crs__none():
+    transformer = Transformer.from_pipeline("+init=ITRF2008:ITRF2000")
+    assert transformer.source_crs is None
+    assert transformer.target_crs is None
+
+
+def test_pickle_transformer_from_pipeline():
+    transformer = Transformer.from_pipeline("+init=ITRF2008:ITRF2000")
+    assert transformer == pickle.loads(pickle.dumps(transformer))
+
+
+def test_pickle_transformer_from_crs():
+    transformer = Transformer.from_crs(
+        "EPSG:4326",
+        "EPSG:2964",
+        always_xy=True,
+        area_of_interest=AreaOfInterest(-136.46, 49.0, -60.72, 83.17),
+    )
+    assert transformer == pickle.loads(pickle.dumps(transformer))
+
+
+def test_unpickle_transformer_from_crs_v1_3():
+    pickled_transformer = (
+        b"\x80\x04\x95p\x01\x00\x00\x00\x00\x00\x00\x8c\x12"
+        b"pyproj.transformer\x94\x8c\x0bTransformer\x94\x93\x94)"
+        b"\x81\x94}\x94\x8c\x12_transformer_maker\x94h\x00\x8c\x12"
+        b"TransformerFromCRS\x94\x93\x94)\x81\x94}\x94(\x8c\x08"
+        b"crs_from\x94C\tEPSG:4326\x94\x8c\x06crs_to\x94C\tEPSG:2964"
+        b"\x94\x8c\talways_xy\x94\x88\x8c\x10area_of_interest\x94\x8c\n"
+        b"pyproj.aoi\x94\x8c\x0eAreaOfInterest\x94\x93\x94)\x81\x94}\x94"
+        b"(\x8c\x0fwest_lon_degree\x94G\xc0a\x0e\xb8Q\xeb\x85\x1f\x8c\x10"
+        b"south_lat_degree\x94G@H\x80\x00\x00\x00\x00\x00\x8c\x0f"
+        b"east_lon_degree\x94G\xc0N\\(\xf5\xc2\x8f\\\x8c\x10"
+        b"north_lat_degree\x94G@T\xca\xe1G\xae\x14"
+        b"{ub\x8c\tauthority\x94N\x8c\x08accuracy\x94N\x8c\x0eallow_ballpark\x94Nubsb."
+    )
+    transformer = Transformer.from_crs(
+        "EPSG:4326",
+        "EPSG:2964",
+        always_xy=True,
+        area_of_interest=AreaOfInterest(-136.46, 49.0, -60.72, 83.17),
+    )
+    assert transformer == pickle.loads(pickled_transformer)
+
+
+def test_transformer_group_accuracy_filter():
+    group = TransformerGroup("EPSG:4326", "EPSG:4258", accuracy=0.05)
+    assert not group.transformers
+    assert not group.unavailable_operations
+
+
+def test_transformer_group_allow_ballpark_filter():
+    group = TransformerGroup(
+        "EPSG:4326", "EPSG:4258", authority="PROJ", allow_ballpark=False
+    )
+    assert not group.transformers
+    assert not group.unavailable_operations
+
+
+def test_transformer_group_allow_superseded_filter():
+    default_group = TransformerGroup(4203, 4326)
+    superseded_group = TransformerGroup(4203, 4326, allow_superseded=True)
+    assert len(superseded_group.transformers) > len(default_group.transformers)
+
+
+def test_transformer_group_authority_filter():
+    group = TransformerGroup("EPSG:4326", "EPSG:4258", authority="PROJ")
+    assert len(group.transformers) == 1
+    assert not group.unavailable_operations
+    assert (
+        group.transformers[0].description
+        == "Ballpark geographic offset from WGS 84 to ETRS89"
+    )
+
+
+def test_transformer_force_over():
+    transformer = Transformer.from_crs("EPSG:4326", "EPSG:3857", force_over=True)
+    # Test a point along the equator.
+    # The same point, but in two different representations.
+    xxx, yyy = transformer.transform(0, 140)
+    xxx_over, yyy_over = transformer.transform(0, -220)
+    # Web Mercator x's between 0 and 180 longitude come out positive.
+    # But when forcing the over flag, the -220 calculation makes it flip.
+    assert xxx > 0
+    assert xxx_over < 0
+    # check it works in both directions
+    xxx_inverse, yyy_inverse = transformer.transform(
+        xxx, yyy, direction=TransformDirection.INVERSE
+    )
+    xxx_over_inverse, yyy_over_inverse = transformer.transform(
+        xxx_over, yyy_over, direction=TransformDirection.INVERSE
+    )
+    assert_almost_equal(xxx_inverse, 0)
+    assert_almost_equal(xxx_over_inverse, 0)
+    assert_almost_equal(yyy_inverse, 140)
+    assert_almost_equal(yyy_over_inverse, -220)
+
+
+def test_transformer__get_last_used_operation():
+    transformer = Transformer.from_crs("EPSG:4326", "EPSG:3857")
+    if PROJ_GTE_91:
+        with pytest.raises(
+            ProjError,
+            match=(
+                r"Last used operation not found\. "
+                r"This is likely due to not initiating a transform\."
+            ),
+        ):
+            transformer.get_last_used_operation()
+        xxx, yyy = transformer.transform(1, 2)
+        operation = transformer.get_last_used_operation()
+        assert isinstance(operation, Transformer)
+        assert xxx, yyy == operation.transform(1, 2)
+    else:
+        with pytest.raises(
+            NotImplementedError,
+            match=r"PROJ 9\.1\+ required to get last used operation\.",
+        ):
+            transformer.get_last_used_operation()

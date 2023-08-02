@@ -4,7 +4,7 @@ Utility methods to print system info for debugging
 adapted from :func:`sklearn.utils._show_versions`
 which was adapted from :func:`pandas.show_versions`
 """
-import importlib
+import importlib.metadata
 import platform
 import sys
 
@@ -35,6 +35,7 @@ def _get_proj_info():
     """
     # pylint: disable=import-outside-toplevel
     import pyproj
+    from pyproj.database import get_database_metadata
     from pyproj.exceptions import DataDirError
 
     try:
@@ -47,6 +48,27 @@ def _get_proj_info():
         ("PROJ", pyproj.__proj_version__),
         ("data dir", data_dir),
         ("user_data_dir", pyproj.datadir.get_user_data_dir()),
+        ("PROJ DATA (recommended version)", get_database_metadata("PROJ_DATA.VERSION")),
+        (
+            "PROJ Database",
+            f"{get_database_metadata('DATABASE.LAYOUT.VERSION.MAJOR')}."
+            f"{get_database_metadata('DATABASE.LAYOUT.VERSION.MINOR')}",
+        ),
+        (
+            "EPSG Database",
+            f"{get_database_metadata('EPSG.VERSION')} "
+            f"[{get_database_metadata('EPSG.DATE')}]",
+        ),
+        (
+            "ESRI Database",
+            f"{get_database_metadata('ESRI.VERSION')} "
+            f"[{get_database_metadata('ESRI.DATE')}]",
+        ),
+        (
+            "IGNF Database",
+            f"{get_database_metadata('IGNF.VERSION')} "
+            f"[{get_database_metadata('IGNF.DATE')}]",
+        ),
     ]
 
     return dict(blob)
@@ -59,28 +81,15 @@ def _get_deps_info():
     deps_info: dict
         version information on relevant Python libraries
     """
-    deps = ["certifi", "pip", "setuptools", "Cython"]
+    deps = ["certifi", "Cython", "setuptools", "pip"]
 
     def get_version(module):
         try:
-            return module.__version__
-        except AttributeError:
-            return module.version
+            return importlib.metadata.version(module)
+        except importlib.metadata.PackageNotFoundError:
+            return None
 
-    deps_info = {}
-
-    for modname in deps:
-        try:
-            if modname in sys.modules:
-                mod = sys.modules[modname]
-            else:
-                mod = importlib.import_module(modname)
-            ver = get_version(mod)
-            deps_info[modname] = ver
-        except ImportError:
-            deps_info[modname] = None
-
-    return deps_info
+    return {dep: get_version(dep) for dep in deps}
 
 
 def _print_info_dict(info_dict):

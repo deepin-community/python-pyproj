@@ -23,7 +23,7 @@ from pyproj.crs.coordinate_operation import (
     OrthographicConversion,
     PolarStereographicAConversion,
     PolarStereographicBConversion,
-    RotatedLatitudeLongitudeConversion,
+    PoleRotationNetCDFCFConversion,
     SinusoidalConversion,
     StereographicConversion,
     TransverseMercatorConversion,
@@ -34,6 +34,12 @@ from pyproj.exceptions import CRSError
 
 
 def _horizontal_datum_from_params(cf_params):
+    datum_name = cf_params.get("horizontal_datum_name")
+    if datum_name and datum_name not in ("undefined", "unknown"):
+        try:
+            return Datum.from_name(datum_name)
+        except CRSError:
+            pass
     # step 1: build ellipsoid
     ellipsoid = None
     ellipsoid_name = cf_params.get("reference_ellipsoid_name")
@@ -46,7 +52,7 @@ def _horizontal_datum_from_params(cf_params):
             radius=cf_params.get("earth_radius"),
         )
     except CRSError:
-        if ellipsoid_name:
+        if ellipsoid_name and ellipsoid_name not in ("undefined", "unknown"):
             ellipsoid = Ellipsoid.from_name(ellipsoid_name)
 
     # step 2: build prime meridian
@@ -58,19 +64,16 @@ def _horizontal_datum_from_params(cf_params):
             longitude=cf_params["longitude_of_prime_meridian"],
         )
     except KeyError:
-        if prime_meridian_name:
+        if prime_meridian_name and prime_meridian_name not in ("undefined", "unknown"):
             prime_meridian = PrimeMeridian.from_name(prime_meridian_name)
 
     # step 3: build datum
-    datum_name = cf_params.get("horizontal_datum_name")
     if ellipsoid or prime_meridian:
         return CustomDatum(
             name=datum_name or "undefined",
             ellipsoid=ellipsoid or "WGS 84",
             prime_meridian=prime_meridian or "Greenwich",
         )
-    if datum_name:
-        return Datum.from_name(datum_name)
     return None
 
 
@@ -333,11 +336,10 @@ def _rotated_latitude_longitude(cf_params):
     """
     http://cfconventions.org/cf-conventions/cf-conventions.html#_rotated_pole
     """
-    return RotatedLatitudeLongitudeConversion(
-        o_lat_p=cf_params["grid_north_pole_latitude"],
-        o_lon_p=cf_params["grid_north_pole_longitude"],
-        # https://github.com/pyproj4/pyproj/issues/927
-        lon_0=cf_params.get("north_pole_grid_longitude", 0.0) + 180,
+    return PoleRotationNetCDFCFConversion(
+        grid_north_pole_latitude=cf_params["grid_north_pole_latitude"],
+        grid_north_pole_longitude=cf_params["grid_north_pole_longitude"],
+        north_pole_grid_longitude=cf_params.get("north_pole_grid_longitude", 0.0),
     )
 
 
@@ -415,7 +417,7 @@ def _geostationary__to_cf(conversion):
         "grid_mapping_name": "geostationary",
         "sweep_angle_axis": sweep_angle_axis,
         "perspective_point_height": params["satellite_height"],
-        # geostationary satellites orbit arount equator
+        # geostationary satellites orbit around equator
         # so latitude_of_natural_origin is often left off and assumed to be 0.0
         "latitude_of_projection_origin": params.get("latitude_of_natural_origin", 0.0),
         "longitude_of_projection_origin": params["longitude_of_natural_origin"],
@@ -626,9 +628,9 @@ def _rotated_latitude_longitude__to_cf(conversion):
     return {
         "grid_mapping_name": "rotated_latitude_longitude",
         "grid_north_pole_latitude": params["o_lat_p"],
-        "grid_north_pole_longitude": params["o_lon_p"],
         # https://github.com/pyproj4/pyproj/issues/927
-        "north_pole_grid_longitude": params["lon_0"] - 180,
+        "grid_north_pole_longitude": params["lon_0"] - 180,
+        "north_pole_grid_longitude": params["o_lon_p"],
     }
 
 

@@ -19,9 +19,11 @@ def set_ca_bundle_path(ca_bundle_path: Union[Path, str, bool, None] = None) -> N
     .. versionadded:: 3.0.0
 
     Sets the path to the CA Bundle used by the `curl`
-    built into PROJ when PROJ network is enabled..
+    built into PROJ when PROJ network is enabled.
 
-    Environment variables that can be used with PROJ 7.2+:
+    See: :c:func:`proj_context_set_ca_bundle_path`
+
+    Environment variables:
 
     - PROJ_CURL_CA_BUNDLE
     - CURL_CA_BUNDLE
@@ -33,7 +35,7 @@ def set_ca_bundle_path(ca_bundle_path: Union[Path, str, bool, None] = None) -> N
         Default is None, which only uses the `certifi` package path as a fallback if
         the environment variables are not set. If a path is passed in, then
         that will be the path used. If it is set to True, then it will default
-        to using the path provied by the `certifi` package. If it is set to False
+        to using the path provided, by the `certifi` package. If it is set to False
         or an empty string then it will default to the system settings or environment
         variables.
     """

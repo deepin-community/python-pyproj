@@ -40,16 +40,32 @@ cdef dict _PJ_TYPE_MAP = {
     PJType.CONCATENATED_OPERATION: PJ_TYPE_CONCATENATED_OPERATION,
     PJType.OTHER_COORDINATE_OPERATION: PJ_TYPE_OTHER_COORDINATE_OPERATION,
 }
+IF (CTE_PROJ_VERSION_MAJOR, CTE_PROJ_VERSION_MINOR) >= (9, 2):
+    _PJ_TYPE_MAP[PJType.DERIVED_PROJECTED_CRS] = PJ_TYPE_DERIVED_PROJECTED_CRS
+
 cdef dict _INV_PJ_TYPE_MAP = {value: key for key, value in _PJ_TYPE_MAP.items()}
+
+
+cdef PJ_TYPE get_pj_type(pj_type) except *:
+    if not isinstance(pj_type, PJType):
+        pj_type = PJType.create(pj_type)
+    IF (CTE_PROJ_VERSION_MAJOR, CTE_PROJ_VERSION_MINOR) < (9, 2):
+        if pj_type is PJType.DERIVED_PROJECTED_CRS:
+            raise NotImplementedError(
+                "DERIVED_PROJECTED_CRS requires PROJ 9.2+"
+            )
+    return _PJ_TYPE_MAP[pj_type]
 
 
 def get_authorities():
     """
     .. versionadded:: 2.4.0
 
+    See: :c:func:`proj_get_authorities_from_database`
+
     Returns
     -------
-    List[str]:
+    list[str]:
         Authorities in PROJ database.
     """
     cdef PJ_CONTEXT* context = pyproj_context_create()
@@ -73,6 +89,8 @@ def get_codes(str auth_name not None, pj_type not None, bint allow_deprecated=Fa
     """
     .. versionadded:: 2.4.0
 
+    See: :c:func:`proj_get_codes_from_database`
+
     Parameters
     ----------
     auth_name: str
@@ -84,11 +102,11 @@ def get_codes(str auth_name not None, pj_type not None, bint allow_deprecated=Fa
 
     Returns
     -------
-    List[str]:
+    list[str]:
         Codes associated with authorities in PROJ database.
     """
     cdef PJ_CONTEXT* context = NULL
-    cdef PJ_TYPE cpj_type = _PJ_TYPE_MAP[PJType.create(pj_type)]
+    cdef PJ_TYPE cpj_type = get_pj_type(pj_type)
     cdef PROJ_STRING_LIST proj_code_list = NULL
     try:
         context = pyproj_context_create()
@@ -161,11 +179,13 @@ def query_crs_info(
 
     Query for CRS information from the PROJ database.
 
+    See: :c:func:`proj_get_crs_info_list_from_database`
+
     Parameters
     ----------
     auth_name: Optional[str], optional
         The name of the authority. Default is all authorities.
-    pj_types: Union[pyproj.enums.PJType, List[pyproj.enums.PJType], None], optional
+    pj_types: Union[pyproj.enums.PJType, list[pyproj.enums.PJType], None], optional
         The type(s) of CRS to get the information (i.e. the types with CRS in the name).
         If None is provided, it will use all of types (i.e. PJType.CRS).
     area_of_interest: Optional[AreaOfInterest], optional
@@ -180,7 +200,7 @@ def query_crs_info(
 
     Returns
     -------
-    List[CRSInfo]:
+    list[CRSInfo]:
         CRS information from the PROJ database.
     """
     cdef PJ_CONTEXT* context = NULL
@@ -204,7 +224,7 @@ def query_crs_info(
                 pj_type_count * sizeof(PJ_TYPE)
             )
             for iii in range(pj_type_count):
-                pj_type_list[iii] = _PJ_TYPE_MAP[PJType.create(pj_types[iii])]
+                pj_type_list[iii] = get_pj_type(pj_types[iii])
 
         context = pyproj_context_create()
         query_params = proj_get_crs_list_parameters_create()
@@ -272,6 +292,8 @@ def query_utm_crs_info(
 
     Query for EPSG UTM CRS information from the PROJ database.
 
+    See: :c:func:`proj_get_crs_info_list_from_database`
+
     Parameters
     ----------
     datum_name: Optional[str], optional
@@ -286,7 +308,7 @@ def query_utm_crs_info(
 
     Returns
     -------
-    List[CRSInfo]:
+    list[CRSInfo]:
         UTM CRS information from the PROJ database.
     """
     projected_crs = query_crs_info(
@@ -349,6 +371,8 @@ def get_units_map(str auth_name=None, str category=None, bint allow_deprecated=F
 
     Get the units available in the PROJ database.
 
+    See: :c:func:`proj_get_units_from_database`
+
     Parameters
     ----------
     auth_name: str, optional
@@ -361,7 +385,7 @@ def get_units_map(str auth_name=None, str category=None, bint allow_deprecated=F
 
     Returns
     -------
-    Dict[str, Unit]
+    dict[str, Unit]
     """
     cdef const char* c_auth_name = NULL
     cdef const char* c_category = NULL
@@ -403,3 +427,50 @@ def get_units_map(str auth_name=None, str category=None, bint allow_deprecated=F
         proj_unit_list_destroy(db_unit_list)
         pyproj_context_destroy(context)
     return units_map
+
+
+def get_database_metadata(str key not None):
+    """
+    Return metadata from the database.
+
+    See: :c:func:`proj_context_get_database_metadata`
+
+    Available keys:
+
+    - DATABASE.LAYOUT.VERSION.MAJOR
+    - DATABASE.LAYOUT.VERSION.MINOR
+    - EPSG.VERSION
+    - EPSG.DATE
+    - ESRI.VERSION
+    - ESRI.DATE
+    - IGNF.SOURCE
+    - IGNF.VERSION
+    - IGNF.DATE
+    - NKG.SOURCE
+    - NKG.VERSION
+    - NKG.DATE
+    - PROJ.VERSION
+    - PROJ_DATA.VERSION : PROJ-data version most compatible with this database.
+
+    Parameters
+    ----------
+    key: str
+        The name of the metadata item to get data for.
+
+    Returns
+    -------
+    Optional[str]:
+        The metatada information if available.
+    """
+    cdef PJ_CONTEXT* context = pyproj_context_create()
+    cdef const char* metadata = NULL
+    try:
+        metadata = proj_context_get_database_metadata(
+            context,
+            cstrdecode(key),
+        )
+        if metadata == NULL:
+            return None
+        return metadata
+    finally:
+        pyproj_context_destroy(context)

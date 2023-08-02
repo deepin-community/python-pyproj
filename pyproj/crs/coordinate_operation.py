@@ -172,36 +172,6 @@ class AzimuthalEquidistantConversion(CoordinateOperation):
         return cls.from_json_dict(aeqd_json)
 
 
-class AzumuthalEquidistantConversion(AzimuthalEquidistantConversion):
-    """
-    For backwards compatibility.
-
-    .. versionadded:: 2.5.0
-    .. deprecated:: 3.2.0
-    """
-
-    def __new__(
-        cls,
-        latitude_natural_origin: float = 0.0,
-        longitude_natural_origin: float = 0.0,
-        false_easting: float = 0.0,
-        false_northing: float = 0.0,
-    ):
-        warnings.warn(
-            "AzumuthalEquidistantConversion is deprecated. "
-            "Please use AzimuthalEquidistantConversion.",
-            FutureWarning,
-            stacklevel=2,
-        )
-        return AzimuthalEquidistantConversion.__new__(
-            AzimuthalEquidistantConversion,
-            latitude_natural_origin=latitude_natural_origin,
-            longitude_natural_origin=longitude_natural_origin,
-            false_easting=false_easting,
-            false_northing=false_northing,
-        )
-
-
 class GeostationarySatelliteConversion(CoordinateOperation):
     """
     .. versionadded:: 2.5.0
@@ -355,36 +325,6 @@ class LambertAzimuthalEqualAreaConversion(CoordinateOperation):
             ],
         }
         return cls.from_json_dict(laea_json)
-
-
-class LambertAzumuthalEqualAreaConversion(LambertAzimuthalEqualAreaConversion):
-    """
-    For backwards compatibility.
-
-    .. versionadded:: 2.5.0
-    .. deprecated:: 3.2.0
-    """
-
-    def __new__(
-        cls,
-        latitude_natural_origin: float = 0.0,
-        longitude_natural_origin: float = 0.0,
-        false_easting: float = 0.0,
-        false_northing: float = 0.0,
-    ):
-        warnings.warn(
-            "LambertAzumuthalEqualAreaConversion is deprecated. "
-            "Please use LambertAzimuthalEqualAreaConversion.",
-            FutureWarning,
-            stacklevel=2,
-        )
-        return LambertAzimuthalEqualAreaConversion.__new__(
-            LambertAzimuthalEqualAreaConversion,
-            latitude_natural_origin=latitude_natural_origin,
-            longitude_natural_origin=longitude_natural_origin,
-            false_easting=false_easting,
-            false_northing=false_northing,
-        )
 
 
 class LambertConformalConic2SPConversion(CoordinateOperation):
@@ -686,8 +626,10 @@ class MercatorAConversion(CoordinateOperation):
         """
         Parameters
         ----------
-        longitude_natural_origin: float, default=0.0
-            Latitude of natural origin (lat_0).
+        latitude_natural_origin: float, default=0.0
+            Latitude of natural origin (lat_0). Must be 0 by `this conversion's
+            definition
+            <https://epsg.org/coord-operation-method_9804/Mercator-variant-A.html>`_.
         longitude_natural_origin: float, default=0.0
             Longitude of natural origin (lon_0).
         false_easting: float, default=0.0
@@ -698,6 +640,10 @@ class MercatorAConversion(CoordinateOperation):
             Scale factor at natural origin (k or k_0).
 
         """
+        if latitude_natural_origin != 0:
+            raise CRSError(
+                "This conversion is defined for only latitude_natural_origin = 0."
+            )
         merc_json = {
             "$schema": "https://proj.org/schemas/v0.2/projjson.schema.json",
             "type": "Conversion",
@@ -836,7 +782,7 @@ class HotineObliqueMercatorBConversion(CoordinateOperation):
         longitude_projection_centre: float
             Longitude of projection centre (lonc).
         azimuth_initial_line: float
-            Azimuth of initial line (azimuth).
+            Azimuth of initial line (alpha).
         angle_from_rectified_to_skew_grid: float
             Angle from Rectified to Skew Grid (gamma).
         scale_factor_on_initial_line: float, default=1.0
@@ -1444,7 +1390,7 @@ class RotatedLatitudeLongitudeConversion(CoordinateOperation):
             Longitude of the North pole of the unrotated source CRS,
             expressed in the rotated geographic CRS.
         lon_0: float, default=0.0
-            Longitude of projection center (lon_0).
+            Longitude of projection center.
 
         """
         rot_latlon_json = {
@@ -1456,6 +1402,61 @@ class RotatedLatitudeLongitudeConversion(CoordinateOperation):
                 {"name": "o_lat_p", "value": o_lat_p, "unit": "degree"},
                 {"name": "o_lon_p", "value": o_lon_p, "unit": "degree"},
                 {"name": "lon_0", "value": lon_0, "unit": "degree"},
+            ],
+        }
+        return cls.from_json_dict(rot_latlon_json)
+
+
+class PoleRotationNetCDFCFConversion(CoordinateOperation):
+    """
+    .. versionadded:: 3.3.0
+
+    Class for constructing the Pole rotation (netCDF CF convention) conversion.
+
+    http://cfconventions.org/cf-conventions/cf-conventions.html#_rotated_pole
+
+    :ref:`PROJ docs <ob_tran>`
+    """
+
+    def __new__(
+        cls,
+        grid_north_pole_latitude: float,
+        grid_north_pole_longitude: float,
+        north_pole_grid_longitude: float = 0.0,
+    ):
+        """
+        Parameters
+        ----------
+        grid_north_pole_latitude: float
+            Latitude of the North pole of the unrotated source CRS,
+            expressed in the rotated geographic CRS (o_lat_p)
+        grid_north_pole_longitude: float
+            Longitude of projection center (lon_0 - 180).
+        north_pole_grid_longitude: float, default=0.0
+            Longitude of the North pole of the unrotated source CRS,
+            expressed in the rotated geographic CRS (o_lon_p).
+        """
+        rot_latlon_json = {
+            "$schema": "https://proj.org/schemas/v0.4/projjson.schema.json",
+            "type": "Conversion",
+            "name": "Pole rotation (netCDF CF convention)",
+            "method": {"name": "Pole rotation (netCDF CF convention)"},
+            "parameters": [
+                {
+                    "name": "Grid north pole latitude (netCDF CF convention)",
+                    "value": grid_north_pole_latitude,
+                    "unit": "degree",
+                },
+                {
+                    "name": "Grid north pole longitude (netCDF CF convention)",
+                    "value": grid_north_pole_longitude,
+                    "unit": "degree",
+                },
+                {
+                    "name": "North pole grid longitude (netCDF CF convention)",
+                    "value": north_pole_grid_longitude,
+                    "unit": "degree",
+                },
             ],
         }
         return cls.from_json_dict(rot_latlon_json)

@@ -18,11 +18,7 @@ from pyproj.crs.coordinate_operation import (
     VerticalPerspectiveConversion,
 )
 from pyproj.exceptions import CRSError
-from test.conftest import (
-    HAYFORD_ELLIPSOID_NAME,
-    PROJ_LOOSE_VERSION,
-    get_wgs84_datum_name,
-)
+from test.conftest import PROJ_GTE_901, PROJ_LOOSE_VERSION
 
 
 def _to_dict(operation):
@@ -85,16 +81,22 @@ def test_to_cf_transverse_mercator():
         towgs84="-122.74,-34.27,-22.83,-1.884,-3.400,-3.030,-15.62",
     )
     towgs84_test = [-122.74, -34.27, -22.83, -1.884, -3.4, -3.03, -15.62]
+    horizontal_datum_name = (
+        "Unknown based on International 1924 (Hayford 1909, 1910) ellipsoid"
+    )
+    if PROJ_GTE_901:
+        horizontal_datum_name = (
+            f"{horizontal_datum_name} using "
+            "towgs84=-122.74,-34.27,-22.83,-1.884,-3.400,-3.030,-15.62"
+        )
     expected_cf = {
         "semi_major_axis": 6378388.0,
         "semi_minor_axis": crs.ellipsoid.semi_minor_metre,
         "inverse_flattening": 297.0,
-        "reference_ellipsoid_name": HAYFORD_ELLIPSOID_NAME,
+        "reference_ellipsoid_name": "International 1924 (Hayford 1909, 1910)",
         "longitude_of_prime_meridian": 0.0,
         "prime_meridian_name": "Greenwich",
-        "horizontal_datum_name": (
-            f"Unknown based on {HAYFORD_ELLIPSOID_NAME} ellipsoid"
-        ),
+        "horizontal_datum_name": horizontal_datum_name,
         "towgs84": towgs84_test,
         "grid_mapping_name": "transverse_mercator",
         "latitude_of_projection_origin": 0.0,
@@ -165,7 +167,7 @@ def test_from_cf_transverse_mercator(towgs84_test):
         "semi_major_axis": 6378388.0,
         "semi_minor_axis": crs.ellipsoid.semi_minor_metre,
         "inverse_flattening": 297.0,
-        "reference_ellipsoid_name": HAYFORD_ELLIPSOID_NAME,
+        "reference_ellipsoid_name": "International 1924 (Hayford 1909, 1910)",
         "longitude_of_prime_meridian": 0.0,
         "prime_meridian_name": "Greenwich",
         "grid_mapping_name": "transverse_mercator",
@@ -219,6 +221,7 @@ def test_cf_from_latlon():
         "grid_mapping_name": "latitude_longitude",
         "geographic_crs_name": "undefined",
         "reference_ellipsoid_name": "undefined",
+        "horizontal_datum_name": "undefined",
     }
     cf_dict = crs.to_cf()
     assert cf_dict.pop("crs_wkt").startswith("GEOGCRS[")
@@ -251,6 +254,7 @@ def test_cf_from_latlon__named():
         "reference_ellipsoid_name": "WGS 84",
         "longitude_of_prime_meridian": 0.0,
         "prime_meridian_name": "Greenwich",
+        "horizontal_datum_name": "World Geodetic System 1984 ensemble",
         "geographic_crs_name": "WGS 84",
         "grid_mapping_name": "latitude_longitude",
     }
@@ -271,7 +275,7 @@ def test_cf_from_utm():
         "longitude_of_prime_meridian": 0.0,
         "prime_meridian_name": "Greenwich",
         "geographic_crs_name": "WGS 84",
-        "horizontal_datum_name": get_wgs84_datum_name(),
+        "horizontal_datum_name": "World Geodetic System 1984 ensemble",
         "projected_crs_name": "WGS 84 / UTM zone 15N",
         "grid_mapping_name": "transverse_mercator",
         "latitude_of_projection_origin": 0.0,
@@ -358,7 +362,7 @@ def test_cf_rotated_latlon():
         "reference_ellipsoid_name": "WGS 84",
         "longitude_of_prime_meridian": 0.0,
         "prime_meridian_name": "Greenwich",
-        "horizontal_datum_name": "World Geodetic System 1984",
+        "horizontal_datum_name": "World Geodetic System 1984 ensemble",
         "grid_mapping_name": "rotated_latitude_longitude",
         "grid_north_pole_latitude": 32.5,
         "grid_north_pole_longitude": 170.0,
@@ -391,8 +395,8 @@ def test_cf_rotated_latlon():
         "proj": "ob_tran",
         "o_proj": "longlat",
         "o_lat_p": 32.5,
-        "o_lon_p": 170.0,
-        "lon_0": 180,
+        "o_lon_p": 0,
+        "lon_0": 350,
         "datum": "WGS84",
         "no_defs": None,
         "type": "crs",
@@ -404,8 +408,8 @@ def test_cf_rotated_latlon__grid():
         dict(
             grid_mapping_name="rotated_latitude_longitude",
             grid_north_pole_latitude=32.5,
-            grid_north_pole_longitude=170.0,
-            north_pole_grid_longitude=1.0,
+            grid_north_pole_longitude=1.0,
+            north_pole_grid_longitude=170.0,
         )
     )
     with pytest.warns(UserWarning):
@@ -477,6 +481,43 @@ def test_rotated_pole_to_cf():
     _test_roundtrip(expected_cf, "GEOGCRS[")
 
 
+def test_grib_rotated_pole_to_cf():
+    rotated_pole_wkt = """GEOGCRS["Coordinate System imported from GRIB file",
+        BASEGEOGCRS["Coordinate System imported from GRIB file",
+            DATUM["unnamed",
+                ELLIPSOID["Sphere",6371229,0,
+                    LENGTHUNIT["metre",1,
+                        ID["EPSG",9001]]]],
+            PRIMEM["Greenwich",0,
+                ANGLEUNIT["degree",0.0174532925199433,
+                    ID["EPSG",9122]]]],
+        DERIVINGCONVERSION["Pole rotation (GRIB convention)",
+            METHOD["Pole rotation (GRIB convention)"],
+            PARAMETER["Latitude of the southern pole (GRIB convention)",-33.443381,
+                ANGLEUNIT["degree",0.0174532925199433,
+                    ID["EPSG",9122]]],
+            PARAMETER["Longitude of the southern pole (GRIB convention)",-93.536426,
+                ANGLEUNIT["degree",0.0174532925199433,
+                    ID["EPSG",9122]]],
+            PARAMETER["Axis rotation (GRIB convention)",0,
+                ANGLEUNIT["degree",0.0174532925199433,
+                    ID["EPSG",9122]]]],
+        CS[ellipsoidal,2],
+            AXIS["latitude",north,
+                ORDER[1],
+                ANGLEUNIT["degree",0.0174532925199433,
+                    ID["EPSG",9122]]],
+            AXIS["longitude",east,
+                ORDER[2],
+                ANGLEUNIT["degree",0.0174532925199433,
+                    ID["EPSG",9122]]]]"""
+    crs = CRS(rotated_pole_wkt)
+    with pytest.warns(UserWarning):
+        cf_dict = crs.to_cf(errcheck=True)
+    assert cf_dict.pop("crs_wkt").startswith("GEOGCRS[")
+    assert not cf_dict
+
+
 def test_cf_lambert_conformal_conic_1sp():
     crs = CRS.from_cf(
         dict(
@@ -493,7 +534,7 @@ def test_cf_lambert_conformal_conic_1sp():
         "reference_ellipsoid_name": "WGS 84",
         "longitude_of_prime_meridian": 0.0,
         "prime_meridian_name": "Greenwich",
-        "horizontal_datum_name": "World Geodetic System 1984",
+        "horizontal_datum_name": "World Geodetic System 1984 ensemble",
         "grid_mapping_name": "lambert_conformal_conic",
         "longitude_of_central_meridian": 265.0,
         "false_easting": 0.0,
@@ -557,7 +598,7 @@ def test_cf_lambert_conformal_conic_2sp(standard_parallel):
         "reference_ellipsoid_name": "WGS 84",
         "longitude_of_prime_meridian": 0.0,
         "prime_meridian_name": "Greenwich",
-        "horizontal_datum_name": "World Geodetic System 1984",
+        "horizontal_datum_name": "World Geodetic System 1984 ensemble",
         "grid_mapping_name": "lambert_conformal_conic",
         "standard_parallel": (25.0, 30.0),
         "latitude_of_projection_origin": 25.0,
@@ -712,7 +753,7 @@ def test_geos_crs_sweep():
         "reference_ellipsoid_name": "WGS 84",
         "longitude_of_prime_meridian": 0.0,
         "prime_meridian_name": "Greenwich",
-        "horizontal_datum_name": "World Geodetic System 1984",
+        "horizontal_datum_name": "World Geodetic System 1984 ensemble",
         "grid_mapping_name": "geostationary",
         "sweep_angle_axis": "x",
         "perspective_point_height": 1.0,
@@ -746,15 +787,13 @@ def test_geos_crs_sweep():
 
 
 def test_geos_crs_fixed_angle_axis():
-    with pytest.warns(DeprecationWarning):
-        crs = CRS.from_cf(
-            dict(
-                grid_mapping_name="geostationary",
-                perspective_point_height=1,
-                fixed_angle_axis="y",
-            ),
-            errcheck=True,
-        )
+    crs = CRS.from_cf(
+        dict(
+            grid_mapping_name="geostationary",
+            perspective_point_height=1,
+            fixed_angle_axis="y",
+        ),
+    )
     expected_cf = {
         "semi_major_axis": 6378137.0,
         "semi_minor_axis": crs.ellipsoid.semi_minor_metre,
@@ -762,7 +801,7 @@ def test_geos_crs_fixed_angle_axis():
         "reference_ellipsoid_name": "WGS 84",
         "longitude_of_prime_meridian": 0.0,
         "prime_meridian_name": "Greenwich",
-        "horizontal_datum_name": "World Geodetic System 1984",
+        "horizontal_datum_name": "World Geodetic System 1984 ensemble",
         "grid_mapping_name": "geostationary",
         "sweep_angle_axis": "x",
         "perspective_point_height": 1.0,
@@ -862,7 +901,7 @@ def test_mercator_b():
         "reference_ellipsoid_name": "WGS 84",
         "longitude_of_prime_meridian": 0.0,
         "prime_meridian_name": "Greenwich",
-        "horizontal_datum_name": "World Geodetic System 1984",
+        "horizontal_datum_name": "World Geodetic System 1984 ensemble",
         "grid_mapping_name": "mercator",
         "standard_parallel": 21.354,
         "longitude_of_projection_origin": 10.0,
@@ -1166,6 +1205,7 @@ def test_azimuthal_equidistant():
     assert cf_dict.pop("crs_wkt").startswith("PROJCRS[")
     assert cf_dict == expected_cf
     # test roundtrip
+    expected_cf["horizontal_datum_name"] = "World Geodetic System 1984 ensemble"
     _test_roundtrip(expected_cf, "PROJCRS[")
     # test coordinate system
     assert crs.cs_to_cf() == [
@@ -1193,7 +1233,7 @@ def test_lambert_azimuthal_equal_area():
         "reference_ellipsoid_name": "WGS 84",
         "longitude_of_prime_meridian": 0.0,
         "prime_meridian_name": "Greenwich",
-        "horizontal_datum_name": "World Geodetic System 1984",
+        "horizontal_datum_name": "World Geodetic System 1984 ensemble",
         "grid_mapping_name": "lambert_azimuthal_equal_area",
         "latitude_of_projection_origin": 1.0,
         "longitude_of_projection_origin": 2.0,
@@ -1233,7 +1273,7 @@ def test_lambert_cylindrical_equal_area():
         "reference_ellipsoid_name": "WGS 84",
         "longitude_of_prime_meridian": 0.0,
         "prime_meridian_name": "Greenwich",
-        "horizontal_datum_name": "World Geodetic System 1984",
+        "horizontal_datum_name": "World Geodetic System 1984 ensemble",
         "grid_mapping_name": "lambert_cylindrical_equal_area",
         "standard_parallel": 1.0,
         "longitude_of_central_meridian": 2.0,
@@ -1265,7 +1305,7 @@ def test_lambert_cylindrical_equal_area():
 
 
 def test_mercator_a():
-    crs = ProjectedCRS(conversion=MercatorAConversion(1, 2, 3, 4))
+    crs = ProjectedCRS(conversion=MercatorAConversion(0, 2, 3, 4))
     expected_cf = {
         "semi_major_axis": 6378137.0,
         "semi_minor_axis": crs.ellipsoid.semi_minor_metre,
@@ -1273,9 +1313,9 @@ def test_mercator_a():
         "reference_ellipsoid_name": "WGS 84",
         "longitude_of_prime_meridian": 0.0,
         "prime_meridian_name": "Greenwich",
-        "horizontal_datum_name": "World Geodetic System 1984",
+        "horizontal_datum_name": "World Geodetic System 1984 ensemble",
         "grid_mapping_name": "mercator",
-        "standard_parallel": 1.0,
+        "standard_parallel": 0.0,
         "longitude_of_projection_origin": 2.0,
         "false_easting": 3.0,
         "false_northing": 4.0,
@@ -1314,7 +1354,7 @@ def test_orthographic():
         "reference_ellipsoid_name": "WGS 84",
         "longitude_of_prime_meridian": 0.0,
         "prime_meridian_name": "Greenwich",
-        "horizontal_datum_name": "World Geodetic System 1984",
+        "horizontal_datum_name": "World Geodetic System 1984 ensemble",
         "grid_mapping_name": "orthographic",
         "latitude_of_projection_origin": 1.0,
         "longitude_of_projection_origin": 2.0,
@@ -1354,7 +1394,7 @@ def test_polar_stereographic_a():
         "reference_ellipsoid_name": "WGS 84",
         "longitude_of_prime_meridian": 0.0,
         "prime_meridian_name": "Greenwich",
-        "horizontal_datum_name": "World Geodetic System 1984",
+        "horizontal_datum_name": "World Geodetic System 1984 ensemble",
         "grid_mapping_name": "polar_stereographic",
         "latitude_of_projection_origin": 90.0,
         "straight_vertical_longitude_from_pole": 1.0,
@@ -1395,7 +1435,7 @@ def test_polar_stereographic_b():
         "reference_ellipsoid_name": "WGS 84",
         "longitude_of_prime_meridian": 0.0,
         "prime_meridian_name": "Greenwich",
-        "horizontal_datum_name": "World Geodetic System 1984",
+        "horizontal_datum_name": "World Geodetic System 1984 ensemble",
         "grid_mapping_name": "polar_stereographic",
         "standard_parallel": 0.0,
         "straight_vertical_longitude_from_pole": 1.0,
@@ -1435,7 +1475,7 @@ def test_stereographic():
         "reference_ellipsoid_name": "WGS 84",
         "longitude_of_prime_meridian": 0.0,
         "prime_meridian_name": "Greenwich",
-        "horizontal_datum_name": "World Geodetic System 1984",
+        "horizontal_datum_name": "World Geodetic System 1984 ensemble",
         "grid_mapping_name": "stereographic",
         "latitude_of_projection_origin": 0.0,
         "longitude_of_projection_origin": 1.0,
@@ -1476,7 +1516,7 @@ def test_sinusoidal():
         "reference_ellipsoid_name": "WGS 84",
         "longitude_of_prime_meridian": 0.0,
         "prime_meridian_name": "Greenwich",
-        "horizontal_datum_name": "World Geodetic System 1984",
+        "horizontal_datum_name": "World Geodetic System 1984 ensemble",
         "grid_mapping_name": "sinusoidal",
         "longitude_of_projection_origin": 0.0,
         "false_easting": 1.0,
@@ -1515,7 +1555,7 @@ def test_vertical_perspective():
         "reference_ellipsoid_name": "WGS 84",
         "longitude_of_prime_meridian": 0.0,
         "prime_meridian_name": "Greenwich",
-        "horizontal_datum_name": "World Geodetic System 1984",
+        "horizontal_datum_name": "World Geodetic System 1984 ensemble",
         "grid_mapping_name": "vertical_perspective",
         "perspective_point_height": 50.0,
         "latitude_of_projection_origin": 0.0,
@@ -1610,7 +1650,6 @@ def test_build_custom_datum__default_ellipsoid():
 def test_cartesian_cs():
     unit = {"type": "LinearUnit", "name": "US Survey Foot", "conversion_factor": 0.3048}
     cartesian_cs = {
-        "$schema": "https://proj.org/schemas/v0.2/projjson.schema.json",
         "type": "CoordinateSystem",
         "subtype": "Cartesian",
         "axis": [
@@ -1637,7 +1676,9 @@ def test_cartesian_cs():
         },
         cartesian_cs=cartesian_cs,
     )
-    assert crs.coordinate_system.to_json_dict() == cartesian_cs
+    json_dict = crs.coordinate_system.to_json_dict()
+    json_dict.pop("$schema")
+    assert json_dict == cartesian_cs
     # test coordinate system
     assert crs.cs_to_cf() == [
         {
@@ -1657,7 +1698,6 @@ def test_cartesian_cs():
 
 def test_ellipsoidal_cs():
     ellipsoidal_cs = {
-        "$schema": "https://proj.org/schemas/v0.2/projjson.schema.json",
         "type": "CoordinateSystem",
         "subtype": "ellipsoidal",
         "axis": [
@@ -1683,7 +1723,9 @@ def test_ellipsoidal_cs():
         ),
         ellipsoidal_cs=ellipsoidal_cs,
     )
-    assert crs.coordinate_system.to_json_dict() == ellipsoidal_cs
+    json_dict = crs.coordinate_system.to_json_dict()
+    json_dict.pop("$schema")
+    assert json_dict == ellipsoidal_cs
     # test coordinate system
     assert crs.cs_to_cf() == [
         {
@@ -1703,7 +1745,6 @@ def test_ellipsoidal_cs():
 
 def test_ellipsoidal_cs__from_name():
     ellipsoidal_cs = {
-        "$schema": "https://proj.org/schemas/v0.2/projjson.schema.json",
         "type": "CoordinateSystem",
         "subtype": "ellipsoidal",
         "axis": [
@@ -1725,7 +1766,9 @@ def test_ellipsoidal_cs__from_name():
         dict(grid_mapping_name="latitude_longitude", geographic_crs_name="WGS 84"),
         ellipsoidal_cs=ellipsoidal_cs,
     )
-    assert crs.coordinate_system.to_json_dict() == ellipsoidal_cs
+    json_dict = crs.coordinate_system.to_json_dict()
+    json_dict.pop("$schema")
+    assert json_dict == ellipsoidal_cs
     # test coordinate system
     assert crs.cs_to_cf() == [
         {
@@ -1746,7 +1789,6 @@ def test_ellipsoidal_cs__from_name():
 def test_export_compound_crs_cs():
     unit = {"type": "LinearUnit", "name": "US Survey Foot", "conversion_factor": 0.3048}
     cartesian_cs = {
-        "$schema": "https://proj.org/schemas/v0.2/projjson.schema.json",
         "type": "CoordinateSystem",
         "subtype": "Cartesian",
         "axis": [
@@ -1760,7 +1802,6 @@ def test_export_compound_crs_cs():
         ],
     }
     vertical_cs = {
-        "$schema": "https://proj.org/schemas/v0.2/projjson.schema.json",
         "type": "CoordinateSystem",
         "subtype": "vertical",
         "axis": [
@@ -1795,8 +1836,12 @@ def test_export_compound_crs_cs():
         cartesian_cs=cartesian_cs,
         vertical_cs=vertical_cs,
     )
-    assert crs.sub_crs_list[0].coordinate_system.to_json_dict() == cartesian_cs
-    assert crs.sub_crs_list[1].coordinate_system.to_json_dict() == vertical_cs
+    cartesian_json_dict = crs.sub_crs_list[0].coordinate_system.to_json_dict()
+    cartesian_json_dict.pop("$schema")
+    vertical_json_dict = crs.sub_crs_list[1].coordinate_system.to_json_dict()
+    vertical_json_dict.pop("$schema")
+    assert cartesian_json_dict == cartesian_cs
+    assert vertical_json_dict == vertical_cs
     # test coordinate system
     assert crs.cs_to_cf() == [
         {
@@ -1847,7 +1892,7 @@ def test_3d_ellipsoidal_cs_depth():
             "name": "WGS 84 (geographic 3D)",
             "datum": {
                 "type": "GeodeticReferenceFrame",
-                "name": "World Geodetic System 1984",
+                "name": "World Geodetic System 1984 ensemble",
                 "ellipsoid": {
                     "name": "WGS 84",
                     "semi_major_axis": 6378137,

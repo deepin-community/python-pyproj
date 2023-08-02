@@ -63,7 +63,7 @@ transformations as well as missing transformations.
 .. code-block:: python
 
     >>> from pyproj.transformer import TransformerGroup
-    >>> trans_group = TransformerGroup("epsg:4326","epsg:2964")
+    >>> trans_group = TransformerGroup("EPSG:4326","EPSG:2964")
     >>> trans_group
     <TransformerGroup: best_available=True>
     - transformers: 8
@@ -85,7 +85,7 @@ transformations as well as missing transformations.
 .. code-block:: python
 
     >>> from pyproj.transformer import TransformerGroup
-    >>> tg = TransformerGroup("epsg:4326", "+proj=aea +lat_0=50 +lon_0=-154 +lat_1=55 +lat_2=65 +x_0=0 +y_0=0 +datum=NAD27 +no_defs +type=crs +units=m", always_xy=True)
+    >>> tg = TransformerGroup("EPSG:4326", "+proj=aea +lat_0=50 +lon_0=-154 +lat_1=55 +lat_2=65 +x_0=0 +y_0=0 +datum=NAD27 +no_defs +type=crs +units=m", always_xy=True)
     UserWarning: Best transformation is not available due to missing Grid(short_name=ntv2_0.gsb, full_name=, package_name=proj-datumgrid-north-america, url=https://download.osgeo.org/proj/proj-datumgrid-north-america-latest.zip, direct_download=True, open_license=True, available=False)
     f"{operation.grids[0]!r}"
     >>> tg
@@ -111,7 +111,7 @@ which transformation operation is selected in the transformation.
 .. code-block:: python
 
     >>> from pyproj.transformer import Transformer, AreaOfInterest
-    >>> transformer = Transformer.from_crs("epsg:4326", "epsg:2694")
+    >>> transformer = Transformer.from_crs("EPSG:4326", "EPSG:2694")
     >>> transformer
     <Concatenated Operation Transformer: pipeline>
     Description: Inverse of Pulkovo 1995 to WGS 84 (2) + 3-degree Gauss-Kruger zone 60
@@ -119,8 +119,8 @@ which transformation operation is selected in the transformation.
     - name: Russia
     - bounds: (18.92, 39.87, -168.97, 85.2)
     >>> transformer = Transformer.from_crs(
-    ...     "epsg:4326",
-    ...     "epsg:2694",
+    ...     "EPSG:4326",
+    ...     "EPSG:2694",
     ...     area_of_interest=AreaOfInterest(-136.46, 49.0, -60.72, 83.17),
     ... )
     >>> transformer
@@ -137,7 +137,7 @@ Promote CRS to 3D
 .. versionadded:: 3.1
 
 
-In PROJ 6+ you neeed to explictly change your CRS to 3D if you have
+In PROJ 6+ you need to explicitly change your CRS to 3D if you have
 2D CRS and you want the ellipsoidal height taken into account.
 
 
@@ -154,6 +154,28 @@ In PROJ 6+ you neeed to explictly change your CRS to 3D if you have
     ...)
     >>> transformer_3d.transform(8.37909, 47.01987, 1000)
     (2671499.8913080636, 1208075.1135782297, 951.4265527743846)
+
+
+Demote CRS to 2D
+----------------
+
+.. versionadded:: 3.6
+
+
+With the need for explicit 3D CRS since PROJ 6+, one might need to retrieve their 2D version,
+for example to create another 3D CRS compound between a 2D CRS and a vertical CRS.
+
+.. code-block:: python
+
+    >>> from pyproj import CRS, Transformer
+    >>> from pyproj.crs import CompoundCRS
+    >>> src_crs = CRS("EPSG:4979") # Any 3D CRS, here the 3D WGS 84
+    >>> vert_crs = CRS("EPSG:5773") # Any vertical CRS, here the EGM96 geoid
+    >>> dst_crs = CompoundCRS(src_crs.name + vert_crs.name, components=[src_crs.to_2d(), vert_crs])
+    >>> transformer_3d = Transformer.from_crs(src_crs, dst_crs, always_xy=True)
+    >>> transformer_3d.transform(8.37909, 47.01987, 1000)
+    (8.37909, 47.01987, 951.7851086745321)
+
 
 Projected CRS Bounds
 ----------------------
@@ -218,6 +240,98 @@ Here is an example where enabling the global context can help:
 
     codes = pyproj.get_codes("EPSG", pyproj.enums.PJType.PROJECTED_CRS, False)
     crs_list = [pyproj.CRS.from_epsg(code) for code in codes]
+
+
+Caching pyproj objects
+-----------------------
+
+If you are likely to re-create pyproj objects such as :class:`pyproj.transformer.Transformer`
+or :class:`pyproj.crs.CRS`, using a cache can help reduce the cost
+of re-creating the objects.
+
+Transformer
+~~~~~~~~~~~~
+
+.. code-block:: python
+
+    from functools import lru_cache
+
+    from pyproj import Transformer
+
+    TransformerFromCRS = lru_cache(Transformer.from_crs)
+
+    Transformer.from_crs(2263, 4326)  # no cache
+    TransformerFromCRS(2263, 4326)  # cache
+
+
+Try it:
+
+.. code-block:: python
+
+    from timeit import timeit
+
+    timeit(
+        "CachedTransformer(2263, 4326)",
+        setup=(
+            "from pyproj import Transformer; "
+            "from functools import lru_cache; "
+            "CachedTransformer = lru_cache(Transformer.from_crs)"
+        ),
+        number=1000000,
+    )
+
+    timeit(
+        "Transformer.from_crs(2263, 4326)",
+        setup=("from pyproj import Transformer"),
+        number=100,
+    )
+
+
+Without the cache, it takes around 2 seconds to do 100 iterations. With the cache,
+it takes 0.1 seconds to do 1 million iterations.
+
+
+CRS Example
+~~~~~~~~~~~~
+
+.. code-block:: python
+
+
+    from functools import lru_cache
+
+    from pyproj import CRS
+
+    CachedCRS = lru_cache(CRS)
+
+    crs = CRS(4326)  # no cache
+    crs = CachedCRS(4326)  # cache
+
+
+Try it:
+
+.. code-block:: python
+
+    from timeit import timeit
+
+    timeit(
+        "CachedCRS(4326)",
+        setup=(
+            "from pyproj import CRS; "
+            "from functools import lru_cache; "
+            "CachedCRS = lru_cache(CRS)"
+        ),
+        number=1000000,
+    )
+
+    timeit(
+        "CRS(4326)",
+        setup=("from pyproj import CRS"),
+        number=1000,
+    )
+
+
+Without the cache, it takes around 1 seconds to do 1000 iterations. With the cache,
+it takes 0.1 seconds to do 1 million iterations.
 
 
 .. _debugging-internal-proj:

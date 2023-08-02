@@ -1,28 +1,6 @@
 # PROJ API Definition
 
-IF CTE_PROJ_VERSION_MAJOR >= 8:
-    cdef extern from "proj.h":
-        const char * proj_context_errno_string(PJ_CONTEXT* ctx, int err)
-        ctypedef enum PJ_CATEGORY:
-            PJ_CATEGORY_ELLIPSOID
-            PJ_CATEGORY_PRIME_MERIDIAN
-            PJ_CATEGORY_DATUM
-            PJ_CATEGORY_CRS
-            PJ_CATEGORY_COORDINATE_OPERATION
-            PJ_CATEGORY_DATUM_ENSEMBLE
-ELSE:
-    cdef extern from "proj.h":
-        const char * proj_errno_string(int err)
-        ctypedef enum PJ_CATEGORY:
-            PJ_CATEGORY_ELLIPSOID
-            PJ_CATEGORY_PRIME_MERIDIAN
-            PJ_CATEGORY_DATUM
-            PJ_CATEGORY_CRS
-            PJ_CATEGORY_COORDINATE_OPERATION
-    cdef int PJ_CATEGORY_DATUM_ENSEMBLE = PJ_CATEGORY_DATUM
-
-
-cdef extern from "proj.h":
+cdef extern from "proj.h" nogil:
     cdef int PROJ_VERSION_MAJOR
     cdef int PROJ_VERSION_MINOR
     cdef int PROJ_VERSION_PATCH
@@ -32,28 +10,28 @@ cdef extern from "proj.h":
                                        const char *dbPath,
                                        const char *const *auxDbPaths,
                                        const char* const *options)
-    void proj_context_set_ca_bundle_path(PJ_CONTEXT *ctx, const char *path);
-
-    # projCtx has been replaced by PJ_CONTEXT *.
-    # projPJ  has been replaced by PJ *
+    void proj_context_set_ca_bundle_path(PJ_CONTEXT *ctx, const char *path)
+    const char *proj_context_get_database_metadata(PJ_CONTEXT* ctx,
+                                                   const char* key)
     ctypedef struct PJ
     ctypedef struct PJ_CONTEXT
     PJ_CONTEXT *proj_context_create ()
     PJ_CONTEXT *proj_context_clone (PJ_CONTEXT *ctx)
     PJ_CONTEXT *proj_context_destroy (PJ_CONTEXT *ctx)
+    void proj_assign_context(PJ* pj, PJ_CONTEXT* ctx)
 
     ctypedef enum PJ_LOG_LEVEL:
-        PJ_LOG_NONE  = 0
-        PJ_LOG_ERROR = 1
-        PJ_LOG_DEBUG = 2
-        PJ_LOG_TRACE = 3
-        PJ_LOG_TELL  = 4
+        PJ_LOG_NONE
+        PJ_LOG_ERROR
+        PJ_LOG_DEBUG
+        PJ_LOG_TRACE
+        PJ_LOG_TELL
     ctypedef void (*PJ_LOG_FUNCTION)(void *, int, const char *)
     void proj_log_func (PJ_CONTEXT *ctx, void *app_data, PJ_LOG_FUNCTION logf)
 
-    int proj_errno (const PJ *P) nogil
-    int proj_context_errno (PJ_CONTEXT *ctx)
-    int  proj_errno_reset (const PJ *P) nogil
+    int proj_errno (const PJ *P)
+    const char * proj_context_errno_string(PJ_CONTEXT* ctx, int err)
+    int  proj_errno_reset (const PJ *P)
     PJ *proj_create (PJ_CONTEXT *ctx, const char *definition)
     PJ *proj_normalize_for_visualization(PJ_CONTEXT *ctx, const PJ* obj)
 
@@ -112,15 +90,16 @@ cdef extern from "proj.h":
     PJ_COORD proj_coord (double x, double y, double z, double t)
 
     ctypedef enum PJ_DIRECTION:
-        PJ_FWD   =  1 # Forward
-        PJ_IDENT =  0 # Do nothing
-        PJ_INV   = -1 # Inverse
+        PJ_FWD        # Forward
+        PJ_IDENT      # Do nothing
+        PJ_INV        # Inverse
 
-    int proj_angular_input (PJ *P, PJ_DIRECTION dir) nogil
-    int proj_angular_output (PJ *P, PJ_DIRECTION dir) nogil
-    int proj_degree_input (PJ *P, PJ_DIRECTION dir) nogil
-    int proj_degree_output (PJ *P, PJ_DIRECTION dir) nogil
+    int proj_angular_input (PJ *P, PJ_DIRECTION dir)
+    int proj_angular_output (PJ *P, PJ_DIRECTION dir)
+    int proj_degree_input (PJ *P, PJ_DIRECTION dir)
+    int proj_degree_output (PJ *P, PJ_DIRECTION dir)
 
+    PJ_COORD proj_trans (PJ *P, PJ_DIRECTION direction, PJ_COORD coord)
     size_t proj_trans_generic (
         PJ *P,
         PJ_DIRECTION direction,
@@ -128,7 +107,21 @@ cdef extern from "proj.h":
         double *y, size_t sy, size_t ny,
         double *z, size_t sz, size_t nz,
         double *t, size_t st, size_t nt
-    ) nogil
+    )
+    int proj_trans_bounds(
+        PJ_CONTEXT* context,
+        PJ *P,
+        PJ_DIRECTION direction,
+        const double xmin,
+        const double ymin,
+        const double xmax,
+        const double ymax,
+        double* out_xmin,
+        double* out_ymin,
+        double* out_xmax,
+        double* out_ymax,
+        int densify_pts
+    )
     ctypedef struct PJ_AREA
     PJ *proj_create_crs_to_crs_from_pj(
         PJ_CONTEXT *ctx,
@@ -220,6 +213,7 @@ cdef extern from "proj.h":
         PJ_TYPE_TEMPORAL_DATUM
         PJ_TYPE_ENGINEERING_DATUM
         PJ_TYPE_PARAMETRIC_DATUM
+        PJ_TYPE_DERIVED_PROJECTED_CRS
 
     PJ_TYPE proj_get_type(const PJ *obj)
     const char* proj_get_name(const PJ *obj)
@@ -424,6 +418,13 @@ cdef extern from "proj.h":
     PJ *proj_concatoperation_get_step(PJ_CONTEXT *ctx,
                                       const PJ *concatoperation,
                                       int i_step)
+    ctypedef enum PJ_CATEGORY:
+        PJ_CATEGORY_ELLIPSOID
+        PJ_CATEGORY_PRIME_MERIDIAN
+        PJ_CATEGORY_DATUM
+        PJ_CATEGORY_CRS
+        PJ_CATEGORY_COORDINATE_OPERATION
+        PJ_CATEGORY_DATUM_ENSEMBLE
     PJ *proj_create_from_database(PJ_CONTEXT *ctx,
                                   const char *auth_name,
                                   const char *code,
@@ -472,7 +473,21 @@ cdef extern from "proj.h":
         double east_lon_degree,
         double north_lat_degree
     )
-
+    void proj_operation_factory_context_set_allow_ballpark_transformations(
+        PJ_CONTEXT *ctx,
+        PJ_OPERATION_FACTORY_CONTEXT *factory_ctx,
+        int allow
+    )
+    void proj_operation_factory_context_set_discard_superseded(
+        PJ_CONTEXT *ctx,
+        PJ_OPERATION_FACTORY_CONTEXT *factory_ctx,
+        int discard
+    )
+    void proj_operation_factory_context_set_desired_accuracy(
+        PJ_CONTEXT *ctx,
+        PJ_OPERATION_FACTORY_CONTEXT *factory_ctx,
+        double accuracy
+    )
     ctypedef enum PROJ_SPATIAL_CRITERION:
         PROJ_SPATIAL_CRITERION_STRICT_CONTAINMENT
         PROJ_SPATIAL_CRITERION_PARTIAL_INTERSECTION
@@ -481,6 +496,7 @@ cdef extern from "proj.h":
         PROJ_GRID_AVAILABILITY_USED_FOR_SORTING
         PROJ_GRID_AVAILABILITY_DISCARD_OPERATION_IF_MISSING_GRID
         PROJ_GRID_AVAILABILITY_IGNORED
+        PROJ_GRID_AVAILABILITY_KNOWN_AVAILABLE
 
     ctypedef struct PJ_FACTORS:
         double meridional_scale
@@ -496,7 +512,7 @@ cdef extern from "proj.h":
         double dy_dlam
         double dy_dphi
 
-    PJ_FACTORS proj_factors(PJ *P, PJ_COORD lp) nogil
+    PJ_FACTORS proj_factors(PJ *P, PJ_COORD lp)
     # neworking related
     const char *proj_context_get_user_writable_directory(PJ_CONTEXT *ctx, int create)
     int proj_context_set_enable_network(PJ_CONTEXT* ctx, int enabled)

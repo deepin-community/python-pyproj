@@ -7,8 +7,7 @@ import json
 import re
 import threading
 import warnings
-from abc import abstractmethod
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Optional, Union
 
 from pyproj._crs import (
     _CRS,
@@ -37,6 +36,17 @@ from pyproj.crs.coordinate_system import Cartesian2DCS, Ellipsoidal2DCS, Vertica
 from pyproj.enums import ProjVersion, WktVersion
 from pyproj.exceptions import CRSError
 from pyproj.geod import Geod
+
+_RE_PROJ_PARAM = re.compile(
+    r"""
+    \+              # parameter starts with '+' character
+    (?P<param>\w+)    # capture parameter name
+    \=?             # match both key only and key-value parameters
+    (?P<value>\S+)? # capture all characters up to next space (None if no value)
+    \s*?            # consume remaining whitespace, if any
+""",
+    re.X,
+)
 
 
 class CRSLocal(threading.local):
@@ -79,7 +89,7 @@ def _prepare_from_proj_string(in_crs_string: str) -> str:
     # make sure the projection starts with +proj or +init
     starting_params = ("+init", "+proj", "init", "proj")
     if not in_crs_string.startswith(starting_params):
-        kvpairs: List[str] = []
+        kvpairs: list[str] = []
         first_item_inserted = False
         for kvpair in in_crs_string.split():
             if not first_item_inserted and (kvpair.startswith(starting_params)):
@@ -137,7 +147,17 @@ def _prepare_from_authority(auth_name: str, auth_code: Union[str, int]):
 
 
 def _prepare_from_epsg(auth_code: Union[str, int]):
-    return _prepare_from_authority("epsg", auth_code)
+    return _prepare_from_authority("EPSG", auth_code)
+
+
+def _is_epsg_code(auth_code: Any) -> bool:
+    if isinstance(auth_code, int):
+        return True
+    if isinstance(auth_code, str) and auth_code.isnumeric():
+        return True
+    if hasattr(auth_code, "shape") and auth_code.shape == ():
+        return True
+    return False
 
 
 class CRS:
@@ -145,6 +165,8 @@ class CRS:
     A pythonic Coordinate Reference System manager.
 
     .. versionadded:: 2.0.0
+
+    See: :c:func:`proj_create`
 
     The functionality is based on other fantastic projects:
 
@@ -158,7 +180,7 @@ class CRS:
 
     """
 
-    def __init__(self, projparams: Any = None, **kwargs) -> None:
+    def __init__(self, projparams: Optional[Any] = None, **kwargs) -> None:
         """
         Initialize a CRS class instance with:
           - PROJ string
@@ -301,12 +323,12 @@ class CRS:
         if projparams:
             if isinstance(projparams, _CRS):
                 projstring = projparams.srs
+            elif _is_epsg_code(projparams):
+                projstring = _prepare_from_epsg(projparams)
             elif isinstance(projparams, str):
                 projstring = _prepare_from_string(projparams)
             elif isinstance(projparams, dict):
                 projstring = _prepare_from_dict(projparams)
-            elif isinstance(projparams, int):
-                projstring = _prepare_from_epsg(projparams)
             elif isinstance(projparams, (list, tuple)) and len(projparams) == 2:
                 projstring = _prepare_from_authority(*projparams)
             elif hasattr(projparams, "to_wkt"):
@@ -564,7 +586,11 @@ class CRS:
 
         """
 
-        def parse(val):
+        proj_string = self.to_proj4()
+        if proj_string is None:
+            return {}
+
+        def _parse(val):
             if val.lower() == "true":
                 return True
             if val.lower() == "false":
@@ -579,16 +605,15 @@ class CRS:
                 pass
             return _try_list_if_string(val)
 
-        proj_string = self.to_proj4()
-        if proj_string is None:
-            return {}
+        proj_dict = {}
+        for param in _RE_PROJ_PARAM.finditer(proj_string):
+            key, value = param.groups()
+            if value is not None:
+                value = _parse(value)
+            if value is not False:
+                proj_dict[key] = value
 
-        items = map(
-            lambda kv: len(kv) == 2 and (kv[0], parse(kv[1])) or (kv[0], None),
-            (part.lstrip("+").split("=", 1) for part in proj_string.strip().split()),
-        )
-
-        return {key: value for key, value in items if value is not False}
+        return proj_dict
 
     def to_cf(
         self,
@@ -617,8 +642,8 @@ class CRS:
             CF-1.8 version of the projection.
 
         """
-        # pylint: disable=too-many-branches
-        cf_dict: Dict[str, Any] = {"crs_wkt": self.to_wkt(wkt_version)}
+        # pylint: disable=too-many-branches,too-many-return-statements
+        cf_dict: dict[str, Any] = {"crs_wkt": self.to_wkt(wkt_version)}
 
         # handle bound CRS
         if (
@@ -627,7 +652,7 @@ class CRS:
             and self.coordinate_operation.towgs84
             and self.source_crs
         ):
-            sub_cf: Dict[str, Any] = self.source_crs.to_cf(
+            sub_cf: dict[str, Any] = self.source_crs.to_cf(
                 wkt_version=wkt_version,
                 errcheck=errcheck,
             )
@@ -668,23 +693,31 @@ class CRS:
         # handle geographic CRS
         if self.geodetic_crs:
             cf_dict["geographic_crs_name"] = self.geodetic_crs.name
+            if self.geodetic_crs.datum:
+                cf_dict["horizontal_datum_name"] = self.geodetic_crs.datum.name
 
         if self.is_geographic:
             if self.coordinate_operation:
+                if (
+                    self.coordinate_operation.method_name.lower()
+                    not in _INVERSE_GEOGRAPHIC_GRID_MAPPING_NAME_MAP
+                ):
+                    if errcheck:
+                        warnings.warn(
+                            "Unsupported coordinate operation: "
+                            f"{self.coordinate_operation.method_name}"
+                        )
+                    return {"crs_wkt": cf_dict["crs_wkt"]}
                 cf_dict.update(
                     _INVERSE_GEOGRAPHIC_GRID_MAPPING_NAME_MAP[
                         self.coordinate_operation.method_name.lower()
                     ](self.coordinate_operation)
                 )
-                if self.datum:
-                    cf_dict["horizontal_datum_name"] = self.datum.name
             else:
                 cf_dict["grid_mapping_name"] = "latitude_longitude"
             return cf_dict
 
         # handle projected CRS
-        if self.is_projected and self.datum:
-            cf_dict["horizontal_datum_name"] = self.datum.name
         coordinate_operation = None
         if not self.is_bound and self.is_projected:
             coordinate_operation = self.coordinate_operation
@@ -704,7 +737,7 @@ class CRS:
                 else:
                     warnings.warn("Coordinate operation not found.")
 
-            return {"crs_wkt": self.to_wkt(wkt_version)}
+            return {"crs_wkt": cf_dict["crs_wkt"]}
 
         cf_dict.update(
             _INVERSE_GRID_MAPPING_NAME_MAP[coordinate_operation_name](
@@ -716,17 +749,14 @@ class CRS:
     @staticmethod
     def from_cf(
         in_cf: dict,
-        ellipsoidal_cs: Any = None,
-        cartesian_cs: Any = None,
-        vertical_cs: Any = None,
-        errcheck=False,
+        ellipsoidal_cs: Optional[Any] = None,
+        cartesian_cs: Optional[Any] = None,
+        vertical_cs: Optional[Any] = None,
     ) -> "CRS":
         """
         .. versionadded:: 2.2.0
 
         .. versionadded:: 3.0.0 ellipsoidal_cs, cartesian_cs, vertical_cs
-
-        .. deprecated:: 3.2.0 errcheck
 
         This converts a Climate and Forecast (CF) Grid Mapping Version 1.8
         dict to a :obj:`pyproj.crs.CRS` object.
@@ -749,21 +779,12 @@ class CRS:
             Input to create a Vertical Coordinate System accepted by
             :meth:`pyproj.crs.CoordinateSystem.from_user_input`
             or :class:`pyproj.crs.coordinate_system.VerticalCS`
-        errcheck: bool, default=False
-            This parameter is for backwards compatibility with the old version.
-            It currently does nothing when True or False. DEPRECATED.
 
         Returns
         -------
         CRS
         """
         # pylint: disable=too-many-branches
-        if errcheck:
-            warnings.warn(
-                "errcheck is deprecated as it does nothing.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
 
         unknown_names = ("unknown", "undefined")
         if "crs_wkt" in in_cf:
@@ -852,7 +873,7 @@ class CRS:
             name="undefined", components=[bound_crs or projected_crs, vertical_crs]
         )
 
-    def cs_to_cf(self) -> List[dict]:
+    def cs_to_cf(self) -> list[dict]:
         """
         .. versionadded:: 3.0.0
 
@@ -863,7 +884,7 @@ class CRS:
 
         Returns
         -------
-        List[dict]:
+        list[dict]:
             CF-1.8 version of the coordinate systems.
         """
         cf_axis_list = []
@@ -969,7 +990,7 @@ class CRS:
         Returns
         -------
         CRS:
-            The the geodeticCRS / geographicCRS from the CRS.
+            The geodeticCRS / geographicCRS from the CRS.
 
         """
         return (
@@ -981,7 +1002,7 @@ class CRS:
     @property
     def source_crs(self) -> Optional["CRS"]:
         """
-        The the base CRS of a BoundCRS or a DerivedCRS/ProjectedCRS,
+        The base CRS of a BoundCRS or a DerivedCRS/ProjectedCRS,
         or the source CRS of a CoordinateOperation.
 
         Returns
@@ -1012,13 +1033,13 @@ class CRS:
         )
 
     @property
-    def sub_crs_list(self) -> List["CRS"]:
+    def sub_crs_list(self) -> list["CRS"]:
         """
         If the CRS is a compound CRS, it will return a list of sub CRS objects.
 
         Returns
         -------
-        List[CRS]
+        list[CRS]
         """
         return [self.__class__(sub_crs) for sub_crs in self._crs.sub_crs_list]
 
@@ -1068,7 +1089,7 @@ class CRS:
         return self._crs.type_name
 
     @property
-    def axis_info(self) -> List[Axis]:
+    def axis_info(self) -> list[Axis]:
         """
         Retrieves all relevant axis information in the CRS.
         If it is a Bound CRS, it gets the axis list from the Source CRS.
@@ -1076,7 +1097,7 @@ class CRS:
 
         Returns
         -------
-        List[Axis]:
+        list[Axis]:
             The list of axis information.
         """
         return self._crs.axis_info
@@ -1176,6 +1197,7 @@ class CRS:
         self,
         version: Union[WktVersion, str] = WktVersion.WKT2_2019,
         pretty: bool = False,
+        output_axis_rule: Optional[bool] = None,
     ) -> str:
         """
         Convert the projection to a WKT string.
@@ -1188,6 +1210,7 @@ class CRS:
           - WKT1_GDAL
           - WKT1_ESRI
 
+        .. versionadded:: 3.6.0 output_axis_rule
 
         Parameters
         ----------
@@ -1196,12 +1219,23 @@ class CRS:
             Default is :attr:`pyproj.enums.WktVersion.WKT2_2019`.
         pretty: bool, default=False
             If True, it will set the output to be a multiline string.
+        output_axis_rule: bool, optional, default=None
+            If True, it will set the axis rule on any case. If false, never.
+            None for AUTO, that depends on the CRS and version.
 
         Returns
         -------
         str
         """
-        return self._crs.to_wkt(version=version, pretty=pretty)
+        wkt = self._crs.to_wkt(
+            version=version, pretty=pretty, output_axis_rule=output_axis_rule
+        )
+        if wkt is None:
+            raise CRSError(
+                f"CRS cannot be converted to a WKT string of a '{version}' version. "
+                "Select a different version of a WKT string or edit your CRS."
+            )
+        return wkt
 
     def to_json(self, pretty: bool = False, indentation: int = 2) -> str:
         """
@@ -1220,7 +1254,10 @@ class CRS:
         -------
         str
         """
-        return self._crs.to_json(pretty=pretty, indentation=indentation)
+        proj_json = self._crs.to_json(pretty=pretty, indentation=indentation)
+        if proj_json is None:
+            raise CRSError("CRS cannot be converted to a PROJ JSON string.")
+        return proj_json
 
     def to_json_dict(self) -> dict:
         """
@@ -1253,7 +1290,10 @@ class CRS:
         -------
         str
         """
-        return self._crs.to_proj4(version=version)
+        proj = self._crs.to_proj4(version=version)
+        if proj is None:
+            raise CRSError("CRS cannot be converted to a PROJ string.")
+        return proj
 
     def to_epsg(self, min_confidence: int = 70) -> Optional[int]:
         """
@@ -1263,7 +1303,7 @@ class CRS:
         Example:
 
         >>> from pyproj import CRS
-        >>> ccs = CRS("epsg:4328")
+        >>> ccs = CRS("EPSG:4328")
         >>> ccs.to_epsg()
         4328
 
@@ -1302,7 +1342,7 @@ class CRS:
         Example:
 
         >>> from pyproj import CRS
-        >>> ccs = CRS("epsg:4328")
+        >>> ccs = CRS("EPSG:4328")
         >>> ccs.to_authority()
         ('EPSG', '4328')
 
@@ -1336,7 +1376,7 @@ class CRS:
 
     def list_authority(
         self, auth_name: Optional[str] = None, min_confidence: int = 70
-    ) -> List[AuthorityMatchInfo]:
+    ) -> list[AuthorityMatchInfo]:
         """
         .. versionadded:: 3.2.0
 
@@ -1345,7 +1385,7 @@ class CRS:
         Example:
 
         >>> from pyproj import CRS
-        >>> ccs = CRS("epsg:4328")
+        >>> ccs = CRS("EPSG:4328")
         >>> ccs.list_authority()
         [AuthorityMatchInfo(auth_name='EPSG', code='4326', confidence=100)]
 
@@ -1371,7 +1411,7 @@ class CRS:
 
         Returns
         -------
-        List[AuthorityMatchInfo]:
+        list[AuthorityMatchInfo]:
             List of authority matches for the CRS.
         """
         return self._crs.list_authority(
@@ -1400,12 +1440,29 @@ class CRS:
         """
         return self.__class__(self._crs.to_3d(name=name))
 
+    def to_2d(self, name: Optional[str] = None) -> "CRS":
+        """
+        .. versionadded:: 3.6.0
+
+        Convert the current CRS to the 2D version if it makes sense.
+
+        Parameters
+        ----------
+        name: str, optional
+            CRS name. Defaults to use the name of the original CRS.
+
+        Returns
+        -------
+        CRS
+        """
+        return self.__class__(self._crs.to_2d(name=name))
+
     @property
     def is_geographic(self) -> bool:
         """
         This checks if the CRS is geographic.
         It will check if it has a geographic CRS
-        in the sub CRS if it is a compount CRS and will check if
+        in the sub CRS if it is a compound CRS and will check if
         the source CRS is geographic if it is a bound CRS.
 
         Returns
@@ -1420,7 +1477,7 @@ class CRS:
         """
         This checks if the CRS is projected.
         It will check if it has a projected CRS
-        in the sub CRS if it is a compount CRS and will check if
+        in the sub CRS if it is a compound CRS and will check if
         the source CRS is projected if it is a bound CRS.
 
         Returns
@@ -1437,7 +1494,7 @@ class CRS:
 
         This checks if the CRS is vertical.
         It will check if it has a vertical CRS
-        in the sub CRS if it is a compount CRS and will check if
+        in the sub CRS if it is a compound CRS and will check if
         the source CRS is vertical if it is a bound CRS.
 
         Returns
@@ -1509,10 +1566,10 @@ class CRS:
     def __eq__(self, other: Any) -> bool:
         return self.equals(other)
 
-    def __getstate__(self) -> Dict[str, str]:
+    def __getstate__(self) -> dict[str, str]:
         return {"srs": self.srs}
 
-    def __setstate__(self, state: Dict[str, Any]):
+    def __setstate__(self, state: dict[str, Any]):
         self.__dict__.update(state)
         self._local = CRSLocal()
 
@@ -1524,7 +1581,7 @@ class CRS:
 
     def __repr__(self) -> str:
         # get axis information
-        axis_info_list: List[str] = []
+        axis_info_list: list[str] = []
         for axis in self.axis_info:
             axis_info_list.extend(["- ", str(axis), "\n"])
         axis_info_str = "".join(axis_info_list)
@@ -1591,8 +1648,7 @@ class CustomConstructorCRS(CRS):
     """
 
     @property
-    @abstractmethod
-    def _expected_types(self) -> Tuple[str, ...]:
+    def _expected_types(self) -> tuple[str, ...]:
         """
         These are the type names of the CRS class
         that are expected when using the from_* methods.
@@ -1648,7 +1704,7 @@ class CustomConstructorCRS(CRS):
         Returns
         -------
         CRS:
-            The the geodeticCRS / geographicCRS from the CRS.
+            The geodeticCRS / geographicCRS from the CRS.
 
         """
         return None if self._crs.geodetic_crs is None else CRS(self._crs.geodetic_crs)
@@ -1656,7 +1712,7 @@ class CustomConstructorCRS(CRS):
     @property
     def source_crs(self) -> Optional["CRS"]:
         """
-        The the base CRS of a BoundCRS or a DerivedCRS/ProjectedCRS,
+        The base CRS of a BoundCRS or a DerivedCRS/ProjectedCRS,
         or the source CRS of a CoordinateOperation.
 
         Returns
@@ -1679,13 +1735,13 @@ class CustomConstructorCRS(CRS):
         return None if self._crs.target_crs is None else CRS(self._crs.target_crs)
 
     @property
-    def sub_crs_list(self) -> List["CRS"]:
+    def sub_crs_list(self) -> list["CRS"]:
         """
         If the CRS is a compound CRS, it will return a list of sub CRS objects.
 
         Returns
         -------
-        List[CRS]
+        list[CRS]
         """
         return [CRS(sub_crs) for sub_crs in self._crs.sub_crs_list]
 
@@ -1724,15 +1780,15 @@ class GeographicCRS(CustomConstructorCRS):
     def __init__(
         self,
         name: str = "undefined",
-        datum: Any = "urn:ogc:def:datum:EPSG::6326",
-        ellipsoidal_cs: Any = None,
+        datum: Any = "urn:ogc:def:ensemble:EPSG::6326",
+        ellipsoidal_cs: Optional[Any] = None,
     ) -> None:
         """
         Parameters
         ----------
         name: str, default="undefined"
             Name of the CRS.
-        datum: Any, default="urn:ogc:def:datum:EPSG::6326"
+        datum: Any, default="urn:ogc:def:ensemble:EPSG::6326"
             Anything accepted by :meth:`pyproj.crs.Datum.from_user_input` or
             a :class:`pyproj.crs.datum.CustomDatum`.
         ellipsoidal_cs: Any, optional
@@ -1740,15 +1796,19 @@ class GeographicCRS(CustomConstructorCRS):
             Anything accepted by :meth:`pyproj.crs.CoordinateSystem.from_user_input`
             or an Ellipsoidal Coordinate System created from :ref:`coordinate_system`.
         """
+        datum = Datum.from_user_input(datum).to_json_dict()
         geographic_crs_json = {
             "$schema": "https://proj.org/schemas/v0.2/projjson.schema.json",
             "type": "GeographicCRS",
             "name": name,
-            "datum": Datum.from_user_input(datum).to_json_dict(),
             "coordinate_system": CoordinateSystem.from_user_input(
                 ellipsoidal_cs or Ellipsoidal2DCS()
             ).to_json_dict(),
         }
+        if datum["type"] == "DatumEnsemble":
+            geographic_crs_json["datum_ensemble"] = datum
+        else:
+            geographic_crs_json["datum"] = datum
         super().__init__(geographic_crs_json)
 
 
@@ -1759,22 +1819,17 @@ class DerivedGeographicCRS(CustomConstructorCRS):
     This class is for building a Derived Geographic CRS
     """
 
-    _expected_types = ("Geographic CRS", "Geographic 2D CRS", "Geographic 3D CRS")
-
-    def _check_type(self):
-        """
-        This validates that the type of the CRS is expected
-        when using the from_* methods.
-        """
-        super()._check_type()
-        if not self.is_derived:
-            raise CRSError("CRS is not a Derived Geographic CRS")
+    _expected_types = (
+        "Derived Geographic CRS",
+        "Derived Geographic 2D CRS",
+        "Derived Geographic 3D CRS",
+    )
 
     def __init__(
         self,
         base_crs: Any,
         conversion: Any,
-        ellipsoidal_cs: Any = None,
+        ellipsoidal_cs: Optional[Any] = None,
         name: str = "undefined",
     ) -> None:
         """
@@ -1870,14 +1925,14 @@ class ProjectedCRS(CustomConstructorCRS):
     This class is for building a Projected CRS.
     """
 
-    _expected_types = ("Projected CRS",)
+    _expected_types = ("Projected CRS", "Derived Projected CRS")
 
     def __init__(
         self,
         conversion: Any,
         name: str = "undefined",
-        cartesian_cs: Any = None,
-        geodetic_crs: Any = None,
+        cartesian_cs: Optional[Any] = None,
+        geodetic_crs: Optional[Any] = None,
     ) -> None:
         """
         Parameters
@@ -1928,7 +1983,7 @@ class VerticalCRS(CustomConstructorCRS):
         self,
         name: str,
         datum: Any,
-        vertical_cs: Any = None,
+        vertical_cs: Optional[Any] = None,
         geoid_model: Optional[str] = None,
     ) -> None:
         """
@@ -1969,13 +2024,13 @@ class CompoundCRS(CustomConstructorCRS):
 
     _expected_types = ("Compound CRS",)
 
-    def __init__(self, name: str, components: List[Any]) -> None:
+    def __init__(self, name: str, components: list[Any]) -> None:
         """
         Parameters
         ----------
         name: str
             The name of the Compound CRS.
-        components: List[Any], optional
+        components: list[Any], optional
             List of CRS to create a Compound Coordinate System.
             List of anything accepted by :meth:`pyproj.crs.CRS.from_user_input`
         """

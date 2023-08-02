@@ -3,6 +3,8 @@ import pickle
 from contextlib import contextmanager
 from pathlib import Path
 
+import numpy
+import pytest
 from packaging import version
 
 import pyproj
@@ -10,15 +12,12 @@ from pyproj.datadir import get_data_dir, get_user_data_dir, set_data_dir
 
 _NETWORK_ENABLED = pyproj.network.is_network_enabled()
 PROJ_LOOSE_VERSION = version.parse(pyproj.__proj_version__)
-PROJ_GTE_8 = PROJ_LOOSE_VERSION >= version.parse("8.0")
-PROJ_GTE_81 = PROJ_LOOSE_VERSION >= version.parse("8.1")
-
-
-if PROJ_GTE_8:
-    # https://github.com/OSGeo/PROJ/pull/2536
-    HAYFORD_ELLIPSOID_NAME = "International 1924 (Hayford 1909, 1910)"
-else:
-    HAYFORD_ELLIPSOID_NAME = "International 1909 (Hayford)"
+PROJ_911 = PROJ_LOOSE_VERSION == version.parse("9.1.1")
+PROJ_GTE_901 = PROJ_LOOSE_VERSION >= version.parse("9.0.1")
+PROJ_GTE_91 = PROJ_LOOSE_VERSION >= version.parse("9.1")
+PROJ_GTE_911 = PROJ_LOOSE_VERSION >= version.parse("9.1.1")
+PROJ_GTE_92 = PROJ_LOOSE_VERSION >= version.parse("9.2.0")
+PROJ_GTE_921 = PROJ_LOOSE_VERSION >= version.parse("9.2.1")
 
 
 def unset_data_dir():
@@ -71,7 +70,7 @@ def grids_available(*grid_names, check_network=True, check_all=False):
     """
     Check if the grids are available
     """
-    if check_network and os.environ.get("PROJ_NETWORK") == "ON":
+    if check_network and pyproj.network.is_network_enabled():
         return True
     available = [
         (
@@ -85,12 +84,6 @@ def grids_available(*grid_names, check_network=True, check_all=False):
     return any(available)
 
 
-def get_wgs84_datum_name():
-    if PROJ_GTE_8:
-        return "World Geodetic System 1984 ensemble"
-    return "World Geodetic System 1984"
-
-
 def assert_can_pickle(raw_obj, tmp_path):
     file_path = tmp_path / "temporary.pickle"
     with open(file_path, "wb") as f:
@@ -100,3 +93,35 @@ def assert_can_pickle(raw_obj, tmp_path):
         unpickled = pickle.load(f)
 
     assert raw_obj == unpickled
+
+
+def _make_1_element_array(data: float):
+    """
+    Turn the float into a 1-element array
+    """
+    return numpy.array([data])
+
+
+def _make_2_element_array(data: float):
+    """
+    Turn the float into a 2-element array
+    """
+    return numpy.array([data] * 2)
+
+
+@pytest.fixture(
+    params=[
+        float,
+        numpy.array,
+        _make_1_element_array,
+        _make_2_element_array,
+    ]
+)
+def scalar_and_array(request):
+    """
+    Ensure cython methods are tested
+    with scalar and arrays to trigger
+    point optimized functions as well
+    as the main functions supporting arrays.
+    """
+    return request.param

@@ -36,6 +36,8 @@ class WktVersion(BaseEnum):
      .. versionadded:: 2.2.0
 
     Supported CRS WKT string versions
+
+    See: :c:enum:`PJ_WKT_TYPE`
     """
 
     #: WKT Version 2 from 2015
@@ -90,6 +92,8 @@ class PJType(BaseEnum):
 
     PJ Types for listing codes with :func:`pyproj.get_codes`
 
+    See: :c:enum:`PJ_TYPE`
+
     Attributes
     ----------
     UNKNOWN
@@ -136,6 +140,7 @@ class PJType(BaseEnum):
     GEOGRAPHIC_3D_CRS = "GEOGRAPHIC_3D_CRS"
     VERTICAL_CRS = "VERTICAL_CRS"
     PROJECTED_CRS = "PROJECTED_CRS"
+    DERIVED_PROJECTED_CRS = "DERIVED_PROJECTED_CRS"
     COMPOUND_CRS = "COMPOUND_CRS"
     TEMPORAL_CRS = "TEMPORAL_CRS"
     ENGINEERING_CRS = "ENGINEERING_CRS"

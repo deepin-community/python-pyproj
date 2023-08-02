@@ -12,14 +12,16 @@ import threading
 import warnings
 from abc import ABC, abstractmethod
 from array import array
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from itertools import chain, islice
 from pathlib import Path
-from typing import Any, Iterable, Iterator, List, Optional, Tuple, Union, overload
+from typing import Any, Optional, Union, overload
 
 from pyproj import CRS
 from pyproj._compat import cstrencode
 from pyproj._crs import AreaOfUse, CoordinateOperation
+from pyproj._datadir import _clear_proj_error
 from pyproj._transformer import (  # noqa: F401 pylint: disable=unused-import
     AreaOfInterest,
     _Transformer,
@@ -73,9 +75,13 @@ class TransformerUnsafe(TransformerMaker):
 
 
 @dataclass(frozen=True)
-class TransformerFromCRS(TransformerMaker):
+class TransformerFromCRS(  # pylint: disable=too-many-instance-attributes
+    TransformerMaker
+):
     """
     .. versionadded:: 3.1.0
+
+    .. versionadded:: 3.4.0 force_over
 
     Generates a Cython _Transformer class from input CRS data.
     """
@@ -87,6 +93,8 @@ class TransformerFromCRS(TransformerMaker):
     authority: Optional[str]
     accuracy: Optional[str]
     allow_ballpark: Optional[bool]
+    force_over: bool = False
+    only_best: Optional[bool] = None
 
     def __call__(self) -> _Transformer:
         """
@@ -102,6 +110,8 @@ class TransformerFromCRS(TransformerMaker):
             authority=self.authority,
             accuracy=self.accuracy,
             allow_ballpark=self.allow_ballpark,
+            force_over=self.force_over,
+            only_best=self.only_best,
         )
 
 
@@ -147,14 +157,18 @@ class TransformerGroup(_TransformerGroup):
         self,
         crs_from: Any,
         crs_to: Any,
-        skip_equivalent: bool = False,
         always_xy: bool = False,
         area_of_interest: Optional[AreaOfInterest] = None,
+        authority: Optional[str] = None,
+        accuracy: Optional[float] = None,
+        allow_ballpark: bool = True,
+        allow_superseded: bool = False,
     ) -> None:
         """Get all possible transformations from a :obj:`pyproj.crs.CRS`
         or input used to create one.
 
-        .. deprecated:: 3.1 skip_equivalent
+        .. versionadded:: 3.4.0 authority, accuracy, allow_ballpark
+        .. versionadded:: 3.6.0 allow_superseded
 
         Parameters
         ----------
@@ -162,37 +176,50 @@ class TransformerGroup(_TransformerGroup):
             Projection of input data.
         crs_to: pyproj.crs.CRS or input used to create one
             Projection of output data.
-        skip_equivalent: bool, default=False
-            DEPRECATED: If true, will skip the transformation operation
-            if input and output projections are equivalent.
         always_xy: bool, default=False
             If true, the transform method will accept as input and return as output
             coordinates using the traditional GIS order, that is longitude, latitude
             for geographic CRS and easting, northing for most projected CRS.
-        area_of_interest: :class:`pyproj.transformer.AreaOfInterest`, optional
+        area_of_interest: :class:`.AreaOfInterest`, optional
             The area of interest to help order the transformations based on the
             best operation for the area.
+        authority: str, optional
+            When not specified, coordinate operations from any authority will be
+            searched, with the restrictions set in the
+            authority_to_authority_preference database table related to the
+            authority of the source/target CRS themselves. If authority is set
+            to “any”, then coordinate operations from any authority will be
+            searched. If authority is a non-empty string different from "any",
+            then coordinate operations will be searched only in that authority
+            namespace (e.g. EPSG).
+        accuracy: float, optional
+            The minimum desired accuracy (in metres) of the candidate
+            coordinate operations.
+        allow_ballpark: bool, default=True
+            Set to False to disallow the use of Ballpark transformation
+            in the candidate coordinate operations. Default is to allow.
+        allow_superseded: bool, default=False
+            Set to True to allow the use of superseded (but not deprecated)
+            transformations in the candidate coordinate operations. Default is
+            to disallow.
 
         """
-        if skip_equivalent:
-            warnings.warn(
-                "skip_equivalent is deprecated.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-
         super().__init__(
             CRS.from_user_input(crs_from)._crs,
             CRS.from_user_input(crs_to)._crs,
             always_xy=always_xy,
             area_of_interest=area_of_interest,
+            authority=authority,
+            accuracy=-1 if accuracy is None else accuracy,
+            allow_ballpark=allow_ballpark,
+            allow_superseded=allow_superseded,
         )
         for iii, transformer in enumerate(self._transformers):
             # pylint: disable=unsupported-assignment-operation
             self._transformers[iii] = Transformer(TransformerUnsafe(transformer))
 
     @property
-    def transformers(self) -> List["Transformer"]:
+    def transformers(self) -> list["Transformer"]:
         """
         list[:obj:`Transformer`]:
             List of available :obj:`Transformer`
@@ -201,7 +228,7 @@ class TransformerGroup(_TransformerGroup):
         return self._transformers
 
     @property
-    def unavailable_operations(self) -> List[CoordinateOperation]:
+    def unavailable_operations(self) -> list[CoordinateOperation]:
         """
         list[:obj:`pyproj.crs.CoordinateOperation`]:
             List of :obj:`pyproj.crs.CoordinateOperation` that are not
@@ -300,15 +327,23 @@ class Transformer:
         transformer_maker: Union[TransformerMaker, None] = None,
     ) -> None:
         if not isinstance(transformer_maker, TransformerMaker):
-            ProjError.clear()
+            _clear_proj_error()
             raise ProjError(
                 "Transformer must be initialized using: "
-                "'from_crs', 'from_pipeline', or 'from_proj'."
+                "'from_crs' or 'from_pipeline'."
             )
 
         self._local = TransformerLocal()
         self._local.transformer = transformer_maker()
         self._transformer_maker = transformer_maker
+
+    def __getstate__(self) -> dict[str, Any]:
+        return {"_transformer_maker": self._transformer_maker}
+
+    def __setstate__(self, state: dict[str, Any]):
+        self.__dict__.update(state)
+        self._local = TransformerLocal()
+        self._local.transformer = self._transformer_maker()
 
     @property
     def _transformer(self):
@@ -395,41 +430,91 @@ class Transformer:
         return self._transformer.scope
 
     @property
-    def operations(self) -> Optional[Tuple[CoordinateOperation]]:
+    def operations(self) -> Optional[tuple[CoordinateOperation]]:
         """
         .. versionadded:: 2.4.0
 
         Returns
         -------
-        Tuple[CoordinateOperation]:
+        tuple[CoordinateOperation]:
             The operations in a concatenated operation.
         """
         return self._transformer.operations
+
+    def get_last_used_operation(self) -> "Transformer":
+        """
+        .. versionadded:: 3.4.0
+
+        .. note:: Requires PROJ 9.1+
+
+        See: :c:func:`proj_trans_get_last_used_operation`
+
+        Returns
+        -------
+        Transformer:
+            The operation used in the transform call.
+        """
+        return Transformer(
+            TransformerUnsafe(self._transformer.get_last_used_operation())
+        )
 
     @property
     def is_network_enabled(self) -> bool:
         """
         .. versionadded:: 3.0.0
 
+        Returns
+        -------
         bool:
             If the network is enabled.
         """
         return self._transformer.is_network_enabled
 
+    @property
+    def source_crs(self) -> Optional[CRS]:
+        """
+        .. versionadded:: 3.3.0
+
+        Returns
+        -------
+        Optional[CRS]:
+            The source CRS of a CoordinateOperation.
+        """
+        return (
+            None
+            if self._transformer.source_crs is None
+            else CRS(self._transformer.source_crs)
+        )
+
+    @property
+    def target_crs(self) -> Optional[CRS]:
+        """
+        .. versionadded:: 3.3.0
+
+        Returns
+        -------
+        Optional[CRS]:
+            The target CRS of a CoordinateOperation.
+        """
+        return (
+            None
+            if self._transformer.target_crs is None
+            else CRS(self._transformer.target_crs)
+        )
+
     @staticmethod
     def from_proj(
         proj_from: Any,
         proj_to: Any,
-        skip_equivalent: bool = False,
         always_xy: bool = False,
         area_of_interest: Optional[AreaOfInterest] = None,
     ) -> "Transformer":
         """Make a Transformer from a :obj:`pyproj.Proj` or input used to create one.
 
-        .. versionadded:: 2.1.2 skip_equivalent
+        .. deprecated:: 3.4.1 :meth:`~Transformer.from_crs` is preferred.
+
         .. versionadded:: 2.2.0 always_xy
         .. versionadded:: 2.3.0 area_of_interest
-        .. deprecated:: 3.1 skip_equivalent
 
         Parameters
         ----------
@@ -437,14 +522,11 @@ class Transformer:
             Projection of input data.
         proj_to: :obj:`pyproj.Proj` or input used to create one
             Projection of output data.
-        skip_equivalent: bool, default=False
-            DEPRECATED: If true, will skip the transformation operation
-            if input and output projections are equivalent.
         always_xy: bool, default=False
             If true, the transform method will accept as input and return as output
             coordinates using the traditional GIS order, that is longitude, latitude
             for geographic CRS and easting, northing for most projected CRS.
-        area_of_interest: :class:`pyproj.transformer.AreaOfInterest`, optional
+        area_of_interest: :class:`.AreaOfInterest`, optional
             The area of interest to help select the transformation.
 
         Returns
@@ -463,7 +545,6 @@ class Transformer:
         return Transformer.from_crs(
             proj_from.crs,
             proj_to.crs,
-            skip_equivalent=skip_equivalent,
             always_xy=always_xy,
             area_of_interest=area_of_interest,
         )
@@ -472,20 +553,26 @@ class Transformer:
     def from_crs(
         crs_from: Any,
         crs_to: Any,
-        skip_equivalent: bool = False,
         always_xy: bool = False,
         area_of_interest: Optional[AreaOfInterest] = None,
         authority: Optional[str] = None,
         accuracy: Optional[float] = None,
         allow_ballpark: Optional[bool] = None,
+        force_over: bool = False,
+        only_best: Optional[bool] = None,
     ) -> "Transformer":
         """Make a Transformer from a :obj:`pyproj.crs.CRS` or input used to create one.
 
-        .. versionadded:: 2.1.2 skip_equivalent
+        See:
+
+        - :c:func:`proj_create_crs_to_crs`
+        - :c:func:`proj_create_crs_to_crs_from_pj`
+
         .. versionadded:: 2.2.0 always_xy
         .. versionadded:: 2.3.0 area_of_interest
         .. versionadded:: 3.1.0 authority, accuracy, allow_ballpark
-        .. deprecated:: 3.1 skip_equivalent
+        .. versionadded:: 3.4.0 force_over
+        .. versionadded:: 3.5.0 only_best
 
         Parameters
         ----------
@@ -493,14 +580,11 @@ class Transformer:
             Projection of input data.
         crs_to: pyproj.crs.CRS or input used to create one
             Projection of output data.
-        skip_equivalent: bool, default=False
-            DEPRECATED: If true, will skip the transformation operation
-            if input and output projections are equivalent.
         always_xy: bool, default=False
             If true, the transform method will accept as input and return as output
             coordinates using the traditional GIS order, that is longitude, latitude
             for geographic CRS and easting, northing for most projected CRS.
-        area_of_interest: :class:`pyproj.transformer.AreaOfInterest`, optional
+        area_of_interest: :class:`.AreaOfInterest`, optional
             The area of interest to help select the transformation.
         authority: str, optional
             When not specified, coordinate operations from any authority will be
@@ -510,27 +594,34 @@ class Transformer:
             to “any”, then coordinate operations from any authority will be
             searched. If authority is a non-empty string different from "any",
             then coordinate operations will be searched only in that authority
-            namespace (e.g. EPSG). Requires PROJ 8+.
+            namespace (e.g. EPSG).
         accuracy: float, optional
             The minimum desired accuracy (in metres) of the candidate
-            coordinate operations. Requires PROJ 8+.
+            coordinate operations.
         allow_ballpark: bool, optional
             Set to False to disallow the use of Ballpark transformation
             in the candidate coordinate operations. Default is to allow.
-            Requires PROJ 8+.
+        force_over: bool, default=False
+            If True, it will to force the +over flag on the transformation.
+            Requires PROJ 9+.
+        only_best: bool, optional
+            Can be set to True to cause PROJ to error out if the best
+            transformation known to PROJ and usable by PROJ if all grids known and
+            usable by PROJ were accessible, cannot be used. Best transformation should
+            be understood as the transformation returned by
+            :c:func:`proj_get_suggested_operation` if all known grids were
+            accessible (either locally or through network).
+            Note that the default value for this option can be also set with the
+            :envvar:`PROJ_ONLY_BEST_DEFAULT` environment variable, or with the
+            ``only_best_default`` setting of :ref:`proj-ini`.
+            The only_best kwarg overrides the default value if set.
+            Requires PROJ 9.2+.
 
         Returns
         -------
         Transformer
 
         """
-        if skip_equivalent:
-            warnings.warn(
-                "skip_equivalent is deprecated.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-
         return Transformer(
             TransformerFromCRS(
                 cstrencode(CRS.from_user_input(crs_from).srs),
@@ -540,6 +631,8 @@ class Transformer:
                 authority=authority,
                 accuracy=accuracy if accuracy is None else str(accuracy),
                 allow_ballpark=allow_ballpark,
+                force_over=force_over,
+                only_best=only_best,
             )
         )
 
@@ -549,7 +642,12 @@ class Transformer:
 
         :ref:`pipeline`
 
-        .. versionadded:: 3.1.0 AUTH:CODE string suppor (e.g. EPSG:1671)
+        See:
+
+        - :c:func:`proj_create`
+        - :c:func:`proj_create_from_database`
+
+        .. versionadded:: 3.1.0 AUTH:CODE string support (e.g. EPSG:1671)
 
         Allowed input:
           - a PROJ string
@@ -585,7 +683,7 @@ class Transformer:
         errcheck: bool = False,
         direction: Union[TransformDirection, str] = TransformDirection.FORWARD,
         inplace: bool = False,
-    ) -> Tuple[Any, Any]:
+    ) -> tuple[Any, Any]:
         ...
 
     @overload
@@ -598,7 +696,7 @@ class Transformer:
         errcheck: bool = False,
         direction: Union[TransformDirection, str] = TransformDirection.FORWARD,
         inplace: bool = False,
-    ) -> Tuple[Any, Any, Any]:
+    ) -> tuple[Any, Any, Any]:
         ...
 
     @overload
@@ -612,7 +710,7 @@ class Transformer:
         errcheck: bool = False,
         direction: Union[TransformDirection, str] = TransformDirection.FORWARD,
         inplace: bool = False,
-    ) -> Tuple[Any, Any, Any, Any]:
+    ) -> tuple[Any, Any, Any, Any]:
         ...
 
     def transform(  # pylint: disable=invalid-name
@@ -629,19 +727,34 @@ class Transformer:
         """
         Transform points between two coordinate systems.
 
+        See: :c:func:`proj_trans_generic`
+
         .. versionadded:: 2.1.1 errcheck
         .. versionadded:: 2.2.0 direction
         .. versionadded:: 3.2.0 inplace
 
+        Accepted numeric scalar or array:
+
+        - :class:`int`
+        - :class:`float`
+        - :class:`numpy.floating`
+        - :class:`numpy.integer`
+        - :class:`list`
+        - :class:`tuple`
+        - :class:`array.array`
+        - :class:`numpy.ndarray`
+        - :class:`xarray.DataArray`
+        - :class:`pandas.Series`
+
         Parameters
         ----------
-        xx: scalar or array (numpy or python)
+        xx: scalar or array
             Input x coordinate(s).
-        yy: scalar or array (numpy or python)
+        yy: scalar or array
             Input y coordinate(s).
-        zz: scalar or array (numpy or python), optional
+        zz: scalar or array, optional
             Input z coordinate(s).
-        tt: scalar or array (numpy or python), optional
+        tt: scalar or array, optional
             Input time coordinate(s).
         radians: bool, default=False
             If True, will expect input data to be in radians and will return radians
@@ -663,7 +776,7 @@ class Transformer:
         --------
 
         >>> from pyproj import Transformer
-        >>> transformer = Transformer.from_crs("epsg:4326", "epsg:3857")
+        >>> transformer = Transformer.from_crs("EPSG:4326", "EPSG:3857")
         >>> x3, y3 = transformer.transform(33, 98)
         >>> f"{x3:.3f}  {y3:.3f}"
         '10909310.098  3895303.963'
@@ -696,12 +809,25 @@ class Transformer:
         >>> xpjr, ypjr, zpjr = transprojr.transform(xpj, ypj, zpj, radians=True)
         >>> f"{xpjr:.3f} {ypjr:.3f} {zpjr:.3f}"
         '-2704026.010 -4253051.810 3895878.820'
-        >>> transformer = Transformer.from_proj("epsg:4326", 4326)
+        >>> transformer = Transformer.from_crs("EPSG:4326", 4326)
         >>> xeq, yeq = transformer.transform(33, 98)
         >>> f"{xeq:.0f}  {yeq:.0f}"
         '33  98'
 
         """
+        try:
+            # function optimized for point data
+            return self._transformer._transform_point(
+                inx=xx,
+                iny=yy,
+                inz=zz,
+                intime=tt,
+                direction=direction,
+                radians=radians,
+                errcheck=errcheck,
+            )
+        except TypeError:
+            pass
         # process inputs, making copies that support buffer API.
         inx, x_data_type = _copytobuffer(xx, inplace=inplace)
         iny, y_data_type = _copytobuffer(yy, inplace=inplace)
@@ -715,8 +841,8 @@ class Transformer:
             intime = None
         # call pj_transform.  inx,iny,inz buffers modified in place.
         self._transformer._transform(
-            inx,
-            iny,
+            inx=inx,
+            iny=iny,
             inz=inz,
             intime=intime,
             direction=direction,
@@ -726,7 +852,7 @@ class Transformer:
         # if inputs were lists, tuples or floats, convert back.
         outx = _convertback(x_data_type, inx)
         outy = _convertback(y_data_type, iny)
-        return_data: Tuple[Any, ...] = (outx, outy)
+        return_data: tuple[Any, ...] = (outx, outy)
         if inz is not None:
             return_data += (_convertback(z_data_type, inz),)
         if intime is not None:
@@ -744,6 +870,8 @@ class Transformer:
     ) -> Iterator[Iterable]:
         """
         Iterator/generator version of the function pyproj.Transformer.transform.
+
+        See: :c:func:`proj_trans_generic`
 
         .. versionadded:: 2.1.1 errcheck
         .. versionadded:: 2.2.0 direction
@@ -810,7 +938,7 @@ class Transformer:
         ... ):
         ...     '{:.3f} {:.3f} {:.3f}'.format(*pt)
         '-2704214.394 -4254414.478 3894270.731'
-        >>> transproj_eq = Transformer.from_proj(
+        >>> transproj_eq = Transformer.from_crs(
         ...     'EPSG:4326',
         ...     '+proj=longlat +datum=WGS84 +no_defs +type=crs',
         ...     always_xy=True,
@@ -857,8 +985,7 @@ class Transformer:
                 errcheck=errcheck,
             )
 
-            for point in zip(*([iter(buff)] * stride)):
-                yield point
+            yield from zip(*([iter(buff)] * stride))
 
     def transform_bounds(
         self,
@@ -870,9 +997,11 @@ class Transformer:
         radians: bool = False,
         errcheck: bool = False,
         direction: Union[TransformDirection, str] = TransformDirection.FORWARD,
-    ) -> Tuple[float, float, float, float]:
+    ) -> tuple[float, float, float, float]:
         """
         .. versionadded:: 3.1.0
+
+        See: :c:func:`proj_trans_bounds`
 
         Transform boundary densifying the edges to account for nonlinear
         transformations along these edges and extracting the outermost bounds.
@@ -899,13 +1028,17 @@ class Transformer:
         Parameters
         ----------
         left: float
-            Left bounding coordinate in source CRS.
+            Minimum bounding coordinate of the first axis in source CRS
+            (or the target CRS if using the reverse direction).
         bottom: float
-            Bottom bounding coordinate in source CRS.
+            Minimum bounding coordinate of the second axis in source CRS.
+            (or the target CRS if using the reverse direction).
         right: float
-            Right bounding coordinate in source CRS.
+            Maximum bounding coordinate of the first axis in source CRS.
+            (or the target CRS if using the reverse direction).
         top: float
-            Top bounding coordinate in source CRS.
+            Maximum bounding coordinate of the second axis in source CRS.
+            (or the target CRS if using the reverse direction).
         densify_points: uint, default=21
             Number of points to add to each edge to account for nonlinear edges
             produced by the transform process. Large numbers will produce worse
@@ -1065,17 +1198,14 @@ def transform(  # pylint: disable=invalid-name
     p2: Any,
     x: Any,
     y: Any,
-    z: Any = None,
-    tt: Any = None,
+    z: Optional[Any] = None,
+    tt: Optional[Any] = None,
     radians: bool = False,
     errcheck: bool = False,
-    skip_equivalent: bool = False,
     always_xy: bool = False,
 ):
     """
-    .. versionadded:: 2.1.2 skip_equivalent
     .. versionadded:: 2.2.0 always_xy
-    .. deprecated::3.1 skip_equivalent
 
     .. deprecated:: 2.6.1
         This function is deprecated. See: :ref:`upgrade_transformer`
@@ -1113,39 +1243,6 @@ def transform(  # pylint: disable=invalid-name
     geocentric coordinates, values of x and y are given in meters.
     z is always meters.
 
-    Example usage:
-
-    >>> from pyproj import Proj, transform
-    >>> # projection 1: UTM zone 15, grs80 ellipse, NAD83 datum
-    >>> # (defined by epsg code 26915)
-    >>> p1 = Proj('epsg:26915', preserve_units=False)
-    >>> # projection 2: UTM zone 15, clrk66 ellipse, NAD27 datum
-    >>> p2 = Proj('epsg:26715', preserve_units=False)
-    >>> # find x,y of Jefferson City, MO.
-    >>> x1, y1 = p1(-92.199881,38.56694)
-    >>> # transform this point to projection 2 coordinates.
-    >>> x2, y2 = transform(p1,p2,x1,y1)
-    >>> '%9.3f %11.3f' % (x1,y1)
-    '569704.566 4269024.671'
-    >>> '%9.3f %11.3f' % (x2,y2)
-    '569722.342 4268814.028'
-    >>> '%8.3f %5.3f' % p2(x2,y2,inverse=True)
-    ' -92.200 38.567'
-    >>> # process 3 points at a time in a tuple
-    >>> lats = (38.83,39.32,38.75) # Columbia, KC and StL Missouri
-    >>> lons = (-92.22,-94.72,-90.37)
-    >>> x1, y1 = p1(lons,lats)
-    >>> x2, y2 = transform(p1,p2,x1,y1)
-    >>> xy = x1+y1
-    >>> '%9.3f %9.3f %9.3f %11.3f %11.3f %11.3f' % xy
-    '567703.344 351730.944 728553.093 4298200.739 4353698.725 4292319.005'
-    >>> xy = x2+y2
-    >>> '%9.3f %9.3f %9.3f %11.3f %11.3f %11.3f' % xy
-    '567721.149 351747.558 728569.133 4297989.112 4353489.645 4292106.305'
-    >>> lons, lats = p2(x2,y2,inverse=True)
-    >>> xy = lons+lats
-    >>> '%8.3f %8.3f %8.3f %5.3f %5.3f %5.3f' % xy
-    ' -92.220  -94.720  -90.370 38.830 39.320 38.750'
     """
     warnings.warn(
         (
@@ -1153,12 +1250,12 @@ def transform(  # pylint: disable=invalid-name
             "See: https://pyproj4.github.io/pyproj/stable/"
             "gotchas.html#upgrading-to-pyproj-2-from-pyproj-1"
         ),
-        DeprecationWarning,
+        FutureWarning,
         stacklevel=2,
     )
-    return Transformer.from_proj(
-        p1, p2, skip_equivalent=skip_equivalent, always_xy=always_xy
-    ).transform(xx=x, yy=y, zz=z, tt=tt, radians=radians, errcheck=errcheck)
+    return Transformer.from_proj(p1, p2, always_xy=always_xy).transform(
+        xx=x, yy=y, zz=z, tt=tt, radians=radians, errcheck=errcheck
+    )
 
 
 def itransform(  # pylint: disable=invalid-name
@@ -1169,13 +1266,10 @@ def itransform(  # pylint: disable=invalid-name
     time_3rd: bool = False,
     radians: bool = False,
     errcheck: bool = False,
-    skip_equivalent: bool = False,
     always_xy: bool = False,
 ):
     """
-    .. versionadded:: 2.1.2 skip_equivalent
     .. versionadded:: 2.2.0 always_xy
-    .. deprecated::3.1 skip_equivalent
 
     .. deprecated:: 2.6.1
         This function is deprecated. See: :ref:`upgrade_transformer`
@@ -1237,11 +1331,9 @@ def itransform(  # pylint: disable=invalid-name
             "See: https://pyproj4.github.io/pyproj/stable/"
             "gotchas.html#upgrading-to-pyproj-2-from-pyproj-1"
         ),
-        DeprecationWarning,
+        FutureWarning,
         stacklevel=2,
     )
-    return Transformer.from_proj(
-        p1, p2, skip_equivalent=skip_equivalent, always_xy=always_xy
-    ).itransform(
+    return Transformer.from_proj(p1, p2, always_xy=always_xy).itransform(
         points, switch=switch, time_3rd=time_3rd, radians=radians, errcheck=errcheck
     )

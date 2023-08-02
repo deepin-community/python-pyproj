@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 import concurrent.futures
 import math
 import os
@@ -13,6 +12,7 @@ from numpy.testing import assert_almost_equal
 import pyproj
 from pyproj import Geod, Proj, pj_ellps, pj_list, transform
 from pyproj.exceptions import CRSError, ProjError
+from pyproj.geod import reverse_azimuth
 from test.conftest import proj_network_env
 
 
@@ -130,13 +130,13 @@ class TypeError_Transform_Issue8_Test(unittest.TestCase):
     def test_tranform_none_1st_parmeter(self):
         # test should raise Type error if projections are not of Proj classes
         # version 1.9.4 produced AttributeError, now should raise TypeError
-        with pytest.warns(DeprecationWarning), pytest.raises(CRSError):
+        with pytest.warns(FutureWarning), pytest.raises(CRSError):
             transform(None, self.p, -74, 39)
 
     def test_tranform_none_2nd_parmeter(self):
         # test should raise Type error if projections are not of Proj classes
         # version 1.9.4 has a Segmentation Fault, now should raise TypeError
-        with pytest.warns(DeprecationWarning), pytest.raises(CRSError):
+        with pytest.warns(FutureWarning), pytest.raises(CRSError):
             transform(self.p, None, -74, 39)
 
 
@@ -155,7 +155,7 @@ class ProjLatLongTypeErrorTest(unittest.TestCase):
         p = Proj("+proj=stere +lon_0=-39 +lat_0=90 +lat_ts=71.0 +ellps=WGS84")
         self.assertTrue(isinstance(p, Proj))
         # if not patched this line raises a "TypeError: p2 must be a Proj class"
-        with pytest.warns(DeprecationWarning):
+        with pytest.warns(FutureWarning):
             lon, lat = transform(p, p.to_latlong(), 200000, 400000)
 
 
@@ -260,7 +260,6 @@ class TestRadians(unittest.TestCase):
         )
 
     def test_inv_radians(self):
-
         # Get bearings and distance from Boston to Portland in degrees
         az12_d, az21_d, dist_d = self.g.inv(
             self.boston_d[0],
@@ -300,14 +299,22 @@ class TestRadians(unittest.TestCase):
         )
 
         # Calculate Portland's lon/lat from bearing and distance in radians
-        endlon_r, endlat_r, backaz_r = self.g.fwd(
-            self.boston_r[0], self.boston_r[1], math.radians(az12_d), dist, radians=True
-        )
+        for return_back_azimuth in [False, True]:
+            endlon_r, endlat_r, backaz_r = self.g.fwd(
+                self.boston_r[0],
+                self.boston_r[1],
+                math.radians(az12_d),
+                dist,
+                radians=True,
+                return_back_azimuth=return_back_azimuth,
+            )
+            if not return_back_azimuth:
+                backaz_r = reverse_azimuth(backaz_r, radians=True)
 
-        # Check they are equal
-        self.assertAlmostEqual(endlon_d, math.degrees(endlon_r))
-        self.assertAlmostEqual(endlat_d, math.degrees(endlat_r))
-        self.assertAlmostEqual(backaz_d, math.degrees(backaz_r))
+            # Check they are equal
+            self.assertAlmostEqual(endlon_d, math.degrees(endlon_r))
+            self.assertAlmostEqual(endlat_d, math.degrees(endlat_r))
+            self.assertAlmostEqual(backaz_d, math.degrees(backaz_r))
 
         # Check to make sure we're back in Portland
         self.assertAlmostEqual(endlon_d, self.portland_d[0])

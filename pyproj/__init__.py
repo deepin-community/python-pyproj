@@ -4,12 +4,12 @@ cartographic projections and coordinate transformations library.
 
 Download: http://python.org/pypi/pyproj
 
-Requirements: Python 3.7+.
+Requirements: Python 3.9+.
 
 Contact:  Jeffrey Whitaker <jeffrey.s.whitaker@noaa.gov>
 
 Copyright (c) 2006-2018, Jeffrey Whitaker.
-Copyright (c) 2019-2021, Open source contributors.
+Copyright (c) 2019-2023, Open source contributors.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -28,22 +28,6 @@ HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTIO
 OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 """
-__version__ = "3.2.1"
-__all__ = [
-    "Proj",
-    "Geod",
-    "CRS",
-    "Transformer",
-    "transform",
-    "itransform",
-    "pj_ellps",
-    "pj_list",
-    "get_ellps_map",
-    "get_prime_meridians_map",
-    "get_proj_operations_map",
-    "get_units_map",
-    "show_versions",
-]
 import warnings
 
 import pyproj.network
@@ -82,6 +66,22 @@ from pyproj.transformer import (  # noqa: F401 pylint: disable=unused-import
     transform,
 )
 
+__version__ = "3.6.0"
+__all__ = [
+    "Proj",
+    "Geod",
+    "CRS",
+    "Transformer",
+    "transform",
+    "itransform",
+    "pj_ellps",
+    "pj_list",
+    "get_ellps_map",
+    "get_prime_meridians_map",
+    "get_proj_operations_map",
+    "get_units_map",
+    "show_versions",
+]
 __proj_version__ = proj_version_str
 
 
