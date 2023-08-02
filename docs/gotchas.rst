@@ -154,7 +154,7 @@ the `init=` syntax is that the CRS are different.
 
     >>> from pyproj import CRS
     >>> crs_deprecated = CRS(init="epsg:4544")
-    >>> crs = CRS("epsg:4544")
+    >>> crs = CRS("EPSG:4544")
     >>> crs == crs_deprecated
     False
 
@@ -199,7 +199,7 @@ is in the **axis order**.
 The reason the `min_confidence` parameter in
 :meth:`pyproj.crs.CRS.to_epsg` and :meth:`pyproj.crs.CRS.to_authority`
 exists is because you can initialize a CRS in several different methods and
-some of them do not always coorespond to an EPSG or authortiy code, but it
+some of them do not always correspond to an EPSG or authortiy code, but it
 can be close enough.
 
 For example, if you have a WKT/PROJ string and you use it to create the CRS instance,
@@ -289,5 +289,5 @@ pyproj 1 style:
 pyproj 2 style:
 
     >>> from pyproj import Transformer
-    >>> transformer = Transformer.from_crs("epsg:4326", "epsg:3857")
+    >>> transformer = Transformer.from_crs("EPSG:4326", "EPSG:3857")
     >>> transformer.transform(12, 12)

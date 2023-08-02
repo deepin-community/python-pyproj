@@ -14,13 +14,16 @@ __all__ = [
     "geodesic_version_str",
     "GeodIntermediateFlag",
     "GeodIntermediateReturn",
+    "reverse_azimuth",
 ]
 
 import math
-from typing import Any, Dict, List, Optional, Tuple, Union
+import warnings
+from typing import Any, Optional, Union
 
 from pyproj._geod import Geod as _Geod
 from pyproj._geod import GeodIntermediateReturn, geodesic_version_str
+from pyproj._geod import reverse_azimuth as _reverse_azimuth
 from pyproj.enums import GeodIntermediateFlag
 from pyproj.exceptions import GeodError
 from pyproj.list import get_ellps_map
@@ -29,18 +32,18 @@ from pyproj.utils import DataType, _convertback, _copytobuffer
 pj_ellps = get_ellps_map()
 
 
-def _params_from_ellps_map(ellps):
+def _params_from_ellps_map(ellps: str) -> tuple[float, float, float, float, bool]:
     """
     Build Geodesic parameters from PROJ ellips map
 
     Parameter
     ---------
     ellps: str
-        The name of the ellips in the map.
+        The name of the ellipse in the map.
 
     Returns
     -------
-    Tuple[float, float, float, float, bool]
+    tuple[float, float, float, float, bool]
 
     """
     ellps_dict = pj_ellps[ellps]
@@ -50,16 +53,16 @@ def _params_from_ellps_map(ellps):
         sphere = True
     if "b" in ellps_dict:
         semi_minor_axis: float = ellps_dict["b"]
-        eccentricity_squared: float = 1.0 - semi_minor_axis ** 2 / semi_major_axis ** 2
+        eccentricity_squared: float = 1.0 - semi_minor_axis**2 / semi_major_axis**2
         flattening: float = (semi_major_axis - semi_minor_axis) / semi_major_axis
     elif "rf" in ellps_dict:
         flattening = 1.0 / ellps_dict["rf"]
         semi_minor_axis = semi_major_axis * (1.0 - flattening)
-        eccentricity_squared = 1.0 - semi_minor_axis ** 2 / semi_major_axis ** 2
+        eccentricity_squared = 1.0 - semi_minor_axis**2 / semi_major_axis**2
     return semi_major_axis, semi_minor_axis, flattening, eccentricity_squared, sphere
 
 
-def _params_from_kwargs(kwargs):
+def _params_from_kwargs(kwargs: dict) -> tuple[float, float, float, float]:
     """
     Build Geodesic parameters from input kwargs:
 
@@ -75,23 +78,23 @@ def _params_from_kwargs(kwargs):
 
     Parameter
     ---------
-    ellps: str
-        The name of the ellips in the map.
+    kwargs: dict
+        The input kwargs for an ellipse.
 
     Returns
     -------
-    Tuple[float, float, float, float]
+    tuple[float, float, float, float]
 
     """
     semi_major_axis = kwargs["a"]
     if "b" in kwargs:
         semi_minor_axis = kwargs["b"]
-        eccentricity_squared = 1.0 - semi_minor_axis ** 2 / semi_major_axis ** 2
+        eccentricity_squared = 1.0 - semi_minor_axis**2 / semi_major_axis**2
         flattening = (semi_major_axis - semi_minor_axis) / semi_major_axis
     elif "rf" in kwargs:
         flattening = 1.0 / kwargs["rf"]
         semi_minor_axis = semi_major_axis * (1.0 - flattening)
-        eccentricity_squared = 1.0 - semi_minor_axis ** 2 / semi_major_axis ** 2
+        eccentricity_squared = 1.0 - semi_minor_axis**2 / semi_major_axis**2
     elif "f" in kwargs:
         flattening = kwargs["f"]
         semi_minor_axis = semi_major_axis * (1.0 - flattening)
@@ -99,13 +102,13 @@ def _params_from_kwargs(kwargs):
     elif "es" in kwargs:
         eccentricity_squared = kwargs["es"]
         semi_minor_axis = math.sqrt(
-            semi_major_axis ** 2 - eccentricity_squared * semi_major_axis ** 2
+            semi_major_axis**2 - eccentricity_squared * semi_major_axis**2
         )
         flattening = (semi_major_axis - semi_minor_axis) / semi_major_axis
     elif "e" in kwargs:
         eccentricity_squared = kwargs["e"] ** 2
         semi_minor_axis = math.sqrt(
-            semi_major_axis ** 2 - eccentricity_squared * semi_major_axis ** 2
+            semi_major_axis**2 - eccentricity_squared * semi_major_axis**2
         )
         flattening = (semi_major_axis - semi_minor_axis) / semi_major_axis
     else:
@@ -200,7 +203,7 @@ class Geod(_Geod):
         """
         # if initparams is a proj-type init string,
         # convert to dict.
-        ellpsd: Dict[str, Union[str, float]] = {}
+        ellpsd: dict[str, Union[str, float]] = {}
         if initstring is not None:
             for kvpair in initstring.split():
                 # Actually only +a and +b are needed
@@ -240,8 +243,15 @@ class Geod(_Geod):
         )
 
     def fwd(  # pylint: disable=invalid-name
-        self, lons: Any, lats: Any, az: Any, dist: Any, radians=False
-    ) -> Tuple[Any, Any, Any]:
+        self,
+        lons: Any,
+        lats: Any,
+        az: Any,
+        dist: Any,
+        radians: bool = False,
+        inplace: bool = False,
+        return_back_azimuth: bool = True,
+    ) -> tuple[Any, Any, Any]:
         """
         Forward transformation
 
@@ -249,36 +259,75 @@ class Geod(_Geod):
         points given longitudes and latitudes of initial points,
         plus forward azimuths and distances.
 
+        .. versionadded:: 3.5.0 inplace
+        .. versionadded:: 3.5.0 return_back_azimuth
+
+        Accepted numeric scalar or array:
+
+        - :class:`int`
+        - :class:`float`
+        - :class:`numpy.floating`
+        - :class:`numpy.integer`
+        - :class:`list`
+        - :class:`tuple`
+        - :class:`array.array`
+        - :class:`numpy.ndarray`
+        - :class:`xarray.DataArray`
+        - :class:`pandas.Series`
+
         Parameters
         ----------
-        lons: array, :class:`numpy.ndarray`, list, tuple, or scalar
+        lons: scalar or array
             Longitude(s) of initial point(s)
-        lats: array, :class:`numpy.ndarray`, list, tuple, or scalar
+        lats: scalar or array
             Latitude(s) of initial point(s)
-        az: array, :class:`numpy.ndarray`, list, tuple, or scalar
+        az: scalar or array
             Forward azimuth(s)
-        dist: array, :class:`numpy.ndarray`, list, tuple, or scalar
+        dist: scalar or array
             Distance(s) between initial and terminus point(s)
             in meters
         radians: bool, default=False
             If True, the input data is assumed to be in radians.
             Otherwise, the data is assumed to be in degrees.
+        inplace: bool, default=False
+            If True, will attempt to write the results to the input array
+            instead of returning a new array. This will fail if the input
+            is not an array in C order with the double data type.
+        return_back_azimuth: bool, default=True
+            If True, the third return value will be the back azimuth,
+            Otherwise, it will be the forward azimuth.
 
         Returns
         -------
-        array, :class:`numpy.ndarray`, list, tuple, or scalar:
+        scalar or array:
             Longitude(s) of terminus point(s)
-        array, :class:`numpy.ndarray`, list, tuple, or scalar:
+        scalar or array:
             Latitude(s) of terminus point(s)
-        array, :class:`numpy.ndarray`, list, tuple, or scalar:
-            Back azimuth(s)
+        scalar or array:
+            Back azimuth(s) or Forward azimuth(s)
         """
+        try:
+            # Fast-path for scalar input, will raise if invalid types are input
+            # and we can fallback below
+            return self._fwd_point(
+                lons,
+                lats,
+                az,
+                dist,
+                radians=radians,
+                return_back_azimuth=return_back_azimuth,
+            )
+        except TypeError:
+            pass
+
         # process inputs, making copies that support buffer API.
-        inx, x_data_type = _copytobuffer(lons)
-        iny, y_data_type = _copytobuffer(lats)
-        inz, z_data_type = _copytobuffer(az)
-        ind = _copytobuffer(dist)[0]
-        self._fwd(inx, iny, inz, ind, radians=radians)
+        inx, x_data_type = _copytobuffer(lons, inplace=inplace)
+        iny, y_data_type = _copytobuffer(lats, inplace=inplace)
+        inz, z_data_type = _copytobuffer(az, inplace=inplace)
+        ind = _copytobuffer(dist, inplace=inplace)[0]
+        self._fwd(
+            inx, iny, inz, ind, radians=radians, return_back_azimuth=return_back_azimuth
+        )
         # if inputs were lists, tuples or floats, convert back.
         outx = _convertback(x_data_type, inx)
         outy = _convertback(y_data_type, iny)
@@ -286,44 +335,91 @@ class Geod(_Geod):
         return outx, outy, outz
 
     def inv(
-        self, lons1: Any, lats1: Any, lons2: Any, lats2: Any, radians=False
-    ) -> Tuple[Any, Any, Any]:
+        self,
+        lons1: Any,
+        lats1: Any,
+        lons2: Any,
+        lats2: Any,
+        radians: bool = False,
+        inplace: bool = False,
+        return_back_azimuth: bool = True,
+    ) -> tuple[Any, Any, Any]:
         """
+
         Inverse transformation
 
         Determine forward and back azimuths, plus distances
         between initial points and terminus points.
 
+        .. versionadded:: 3.5.0 inplace
+        .. versionadded:: 3.5.0 return_back_azimuth
+
+        Accepted numeric scalar or array:
+
+        - :class:`int`
+        - :class:`float`
+        - :class:`numpy.floating`
+        - :class:`numpy.integer`
+        - :class:`list`
+        - :class:`tuple`
+        - :class:`array.array`
+        - :class:`numpy.ndarray`
+        - :class:`xarray.DataArray`
+        - :class:`pandas.Series`
+
         Parameters
         ----------
-        lons1: array, :class:`numpy.ndarray`, list, tuple, or scalar
+        lons1: scalar or array
             Longitude(s) of initial point(s)
-        lats1: array, :class:`numpy.ndarray`, list, tuple, or scalar
+        lats1: scalar or array
             Latitude(s) of initial point(s)
-        lons2: array, :class:`numpy.ndarray`, list, tuple, or scalar
+        lons2: scalar or array
             Longitude(s) of terminus point(s)
-        lats2: array, :class:`numpy.ndarray`, list, tuple, or scalar
+        lats2: scalar or array
             Latitude(s) of terminus point(s)
         radians: bool, default=False
             If True, the input data is assumed to be in radians.
             Otherwise, the data is assumed to be in degrees.
+        inplace: bool, default=False
+            If True, will attempt to write the results to the input array
+            instead of returning a new array. This will fail if the input
+            is not an array in C order with the double data type.
+        return_back_azimuth: bool, default=True
+            If True, the second return value (azi21) will be the back azimuth
+            (flipped 180 degrees), Otherwise, it will also be a forward azimuth.
 
         Returns
         -------
-        array, :class:`numpy.ndarray`, list, tuple, or scalar:
-            Forward azimuth(s)
-        array, :class:`numpy.ndarray`, list, tuple, or scalar:
-            Back azimuth(s)
-        array, :class:`numpy.ndarray`, list, tuple, or scalar:
+        scalar or array:
+            Forward azimuth(s) (azi12)
+        scalar or array:
+            Back azimuth(s) or Forward azimuth(s) (azi21)
+        scalar or array:
             Distance(s) between initial and terminus point(s)
             in meters
         """
+        try:
+            # Fast-path for scalar input, will raise if invalid types are input
+            # and we can fallback below
+            return self._inv_point(
+                lons1,
+                lats1,
+                lons2,
+                lats2,
+                radians=radians,
+                return_back_azimuth=return_back_azimuth,
+            )
+        except TypeError:
+            pass
+
         # process inputs, making copies that support buffer API.
-        inx, x_data_type = _copytobuffer(lons1)
-        iny, y_data_type = _copytobuffer(lats1)
-        inz, z_data_type = _copytobuffer(lons2)
-        ind = _copytobuffer(lats2)[0]
-        self._inv(inx, iny, inz, ind, radians=radians)
+        inx, x_data_type = _copytobuffer(lons1, inplace=inplace)
+        iny, y_data_type = _copytobuffer(lats1, inplace=inplace)
+        inz, z_data_type = _copytobuffer(lons2, inplace=inplace)
+        ind = _copytobuffer(lats2, inplace=inplace)[0]
+        self._inv(
+            inx, iny, inz, ind, radians=radians, return_back_azimuth=return_back_azimuth
+        )
         # if inputs were lists, tuples or floats, convert back.
         outx = _convertback(x_data_type, inx)
         outy = _convertback(y_data_type, iny)
@@ -340,7 +436,7 @@ class Geod(_Geod):
         radians: bool = False,
         initial_idx: int = 1,
         terminus_idx: int = 1,
-    ) -> List:
+    ) -> list:
         """
         .. versionadded:: 3.1.0 initial_idx, terminus_idx
 
@@ -428,7 +524,7 @@ class Geod(_Geod):
             lon1=lon1,
             lat1=lat1,
             lon2_or_azi1=lon2,
-            lat2_or_nan=lat2,
+            lat2=lat2,
             npts=npts,
             del_s=0,
             radians=radians,
@@ -438,6 +534,8 @@ class Geod(_Geod):
             out_lons=None,
             out_lats=None,
             out_azis=None,
+            return_back_azimuth=False,
+            is_fwd=False,
         )
         return list(zip(res.lons, res.lats))
 
@@ -453,12 +551,14 @@ class Geod(_Geod):
         terminus_idx: int = 1,
         radians: bool = False,
         flags: GeodIntermediateFlag = GeodIntermediateFlag.DEFAULT,
-        out_lons: Any = None,
-        out_lats: Any = None,
-        out_azis: Any = None,
+        out_lons: Optional[Any] = None,
+        out_lats: Optional[Any] = None,
+        out_azis: Optional[Any] = None,
+        return_back_azimuth: Optional[bool] = None,
     ) -> GeodIntermediateReturn:
         """
         .. versionadded:: 3.1.0
+        .. versionadded:: 3.5.0 return_back_azimuth
 
         Given a single initial point and terminus point,
         and the number of points, returns
@@ -567,17 +667,29 @@ class Geod(_Geod):
             az12(s) of the intermediate point(s)
             If None then buffers would be allocated internnaly
             unless requested otherwise by the flags
+        return_back_azimuth: bool, default=True
+            if True, out_azis will store the back azimuth,
+            Otherwise, out_azis will store the forward azimuth.
 
         Returns
         -------
         GeodIntermediateReturn:
             number of points, distance and output arrays (GeodIntermediateReturn docs)
         """
+        if return_back_azimuth is None:
+            return_back_azimuth = True
+            warnings.warn(
+                "Back azimuth is being returned by default to be compatible with fwd()"
+                "This is a breaking change for pyproj 3.5+."
+                "To avoid this warning, set return_back_azimuth=True."
+                "Otherwise, to restore old behaviour, set return_back_azimuth=False."
+                "This warning will be removed in future version."
+            )
         return super()._inv_or_fwd_intermediate(
             lon1=lon1,
             lat1=lat1,
             lon2_or_azi1=lon2,
-            lat2_or_nan=lat2,
+            lat2=lat2,
             npts=npts,
             del_s=del_s,
             radians=radians,
@@ -587,6 +699,8 @@ class Geod(_Geod):
             out_lons=out_lons,
             out_lats=out_lats,
             out_azis=out_azis,
+            return_back_azimuth=return_back_azimuth,
+            is_fwd=False,
         )
 
     def fwd_intermediate(
@@ -600,12 +714,14 @@ class Geod(_Geod):
         terminus_idx: int = 1,
         radians: bool = False,
         flags: GeodIntermediateFlag = GeodIntermediateFlag.DEFAULT,
-        out_lons: Any = None,
-        out_lats: Any = None,
-        out_azis: Any = None,
+        out_lons: Optional[Any] = None,
+        out_lats: Optional[Any] = None,
+        out_azis: Optional[Any] = None,
+        return_back_azimuth: Optional[bool] = None,
     ) -> GeodIntermediateReturn:
         """
         .. versionadded:: 3.1.0
+        .. versionadded:: 3.5.0 return_back_azimuth
 
         Given a single initial point and azimuth, number of points (npts)
         and delimiter distance between two successive points (del_s), returns
@@ -699,17 +815,29 @@ class Geod(_Geod):
             az12(s) of the intermediate point(s)
             If None then buffers would be allocated internnaly
             unless requested otherwise by the flags
+        return_back_azimuth: bool, default=True
+            if True, out_azis will store the back azimuth,
+            Otherwise, out_azis will store the forward azimuth.
 
         Returns
         -------
         GeodIntermediateReturn:
             number of points, distance and output arrays (GeodIntermediateReturn docs)
         """
+        if return_back_azimuth is None:
+            return_back_azimuth = True
+            warnings.warn(
+                "Back azimuth is being returned by default to be compatible with inv()"
+                "This is a breaking change for pyproj 3.5+."
+                "To avoid this warning, set return_back_azimuth=True."
+                "Otherwise, to restore old behaviour, set return_back_azimuth=False."
+                "This warning will be removed in future version."
+            )
         return super()._inv_or_fwd_intermediate(
             lon1=lon1,
             lat1=lat1,
             lon2_or_azi1=azi1,
-            lat2_or_nan=math.nan,
+            lat2=math.nan,
             npts=npts,
             del_s=del_s,
             radians=radians,
@@ -719,6 +847,8 @@ class Geod(_Geod):
             out_lons=out_lons,
             out_lats=out_lats,
             out_azis=out_azis,
+            return_back_azimuth=return_back_azimuth,
+            is_fwd=True,
         )
 
     def line_length(self, lons: Any, lats: Any, radians: bool = False) -> float:
@@ -797,7 +927,7 @@ class Geod(_Geod):
 
     def polygon_area_perimeter(
         self, lons: Any, lats: Any, radians: bool = False
-    ) -> Tuple[float, float]:
+    ) -> tuple[float, float]:
         """
         .. versionadded:: 2.3.0
 
@@ -893,7 +1023,7 @@ class Geod(_Geod):
 
     def geometry_area_perimeter(
         self, geometry, radians: bool = False
-    ) -> Tuple[float, float]:
+    ) -> tuple[float, float]:
         """
         .. versionadded:: 2.3.0
 
@@ -978,7 +1108,7 @@ class Geod(_Geod):
 
     def __repr__(self) -> str:
         # search for ellipse name
-        for (ellps, vals) in pj_ellps.items():
+        for ellps, vals in pj_ellps.items():
             if self.a == vals["a"]:
                 # self.sphere is True when self.f is zero or very close to
                 # zero (0), so prevent divide by zero.
@@ -1017,3 +1147,40 @@ class Geod(_Geod):
             return False
 
         return self.__repr__() == other.__repr__()
+
+
+def reverse_azimuth(azi: Any, radians: bool = False) -> Any:
+    """
+    Reverses the given azimuth (forward <-> backwards)
+
+    .. versionadded:: 3.5.0
+
+    Accepted numeric scalar or array:
+
+    - :class:`int`
+    - :class:`float`
+    - :class:`numpy.floating`
+    - :class:`numpy.integer`
+    - :class:`list`
+    - :class:`tuple`
+    - :class:`array.array`
+    - :class:`numpy.ndarray`
+    - :class:`xarray.DataArray`
+    - :class:`pandas.Series`
+
+    Parameters
+    ----------
+    azi: scalar or array
+        The azimuth.
+    radians: bool, default=False
+        If True, the input data is assumed to be in radians.
+        Otherwise, the data is assumed to be in degrees.
+
+    Returns
+    -------
+    scalar or array:
+        The reversed azimuth (forward <-> backwards)
+    """
+    inazi, azi_data_type = _copytobuffer(azi)
+    _reverse_azimuth(inazi, radians=radians)
+    return _convertback(azi_data_type, inazi)

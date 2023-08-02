@@ -26,8 +26,8 @@ def test_doctests():
     failure_count = failure_count_proj + failure_count_crs + failure_count_geod
     expected_failure_count = 0
     try:
-        import shapely  # noqa: F401 pylint: disable=unused-import
-    except ImportError:
+        import shapely.geometry  # noqa: F401 pylint: disable=unused-import
+    except (ImportError, OSError):
         # missing shapely
         expected_failure_count = 6
 
@@ -44,7 +44,7 @@ def test_doctests__network():
     """
     with proj_network_env():
         pyproj.network.set_network_enabled(active=True)
-        with pytest.warns(DeprecationWarning):
+        with pytest.warns(FutureWarning):
             failure_count, _ = doctest.testmod(pyproj.transformer, verbose=True)
 
     assert failure_count == 0, f"{failure_count} of the doctests failed"

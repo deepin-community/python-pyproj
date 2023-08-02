@@ -1,5 +1,7 @@
 import concurrent.futures
 import json
+import platform
+from unittest.mock import patch
 
 import numpy
 import pytest
@@ -19,15 +21,16 @@ from pyproj.enums import ProjVersion, WktVersion
 from pyproj.exceptions import CRSError
 from pyproj.transformer import TransformerGroup
 from test.conftest import (
-    HAYFORD_ELLIPSOID_NAME,
-    PROJ_GTE_8,
+    PROJ_GTE_91,
+    PROJ_GTE_901,
+    PROJ_GTE_911,
+    PROJ_GTE_921,
     assert_can_pickle,
-    get_wgs84_datum_name,
     grids_available,
 )
 
 
-class CustomCRS(object):
+class CustomCRS:
     def to_wkt(self):
         return CRS.from_epsg(4326).to_wkt()
 
@@ -73,6 +76,15 @@ def test_from_epsg_string():
         assert CRS.from_string("epsg:xyz")
 
 
+def test_from_epsg_int_like_string():
+    proj = CRS.from_string("4326")
+    assert proj.to_epsg() == 4326
+
+    # Test with invalid EPSG code
+    with pytest.raises(CRSError):
+        assert CRS.from_string("0")
+
+
 def test_from_string():
     wgs84_crs = CRS.from_string("+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs")
     with pytest.warns(UserWarning):
@@ -86,6 +98,17 @@ def test_from_string():
             epsg_init_crs.to_proj4()
             == "+proj=utm +zone=11 +datum=NAD83 +units=m +no_defs +type=crs"
         )
+
+
+def test_from_numpy():
+    crs_numpy = numpy.array([4326])[0]
+    proj = CRS.from_user_input(crs_numpy)
+    assert proj.to_epsg() == 4326
+
+    # Test with invalid EPSG code
+    with pytest.raises(CRSError):
+        crs_numpy = numpy.array([0])[0]
+        assert CRS.from_epsg(crs_numpy)
 
 
 def test_from_string__invalid():
@@ -209,6 +232,40 @@ def test_to_wkt_pretty():
     assert "\n" not in crs.to_wkt()
 
 
+@pytest.mark.parametrize(
+    "version, expected",
+    [
+        ("WKT1_GDAL", False),
+        ("WKT1_ESRI", False),
+        ("WKT2_2019", True),
+    ],
+)
+def test_to_wkt_with_axis_rule_4326(version, expected):
+    crs = CRS.from_epsg(4326)
+    axis = "AXIS"
+    assert (axis in crs.to_wkt(version)) == expected
+    assert (axis in crs.to_wkt(version, output_axis_rule=None)) == expected
+    assert axis in crs.to_wkt(version, output_axis_rule=True)
+    assert axis not in crs.to_wkt(version, output_axis_rule=False)
+
+
+@pytest.mark.parametrize(
+    "version, expected",
+    [
+        ("WKT1_GDAL", True),
+        ("WKT1_ESRI", False),
+        ("WKT2_2019", True),
+    ],
+)
+def test_to_wkt_with_axis_rule_32630(version, expected):
+    crs = CRS.from_epsg(32630)
+    axis = "AXIS"
+    assert (axis in crs.to_wkt(version)) == expected
+    assert (axis in crs.to_wkt(version, output_axis_rule=None)) == expected
+    assert axis in crs.to_wkt(version, output_axis_rule=True)
+    assert axis not in crs.to_wkt(version, output_axis_rule=False)
+
+
 def test_repr():
     with pytest.warns(FutureWarning):
         assert repr(CRS({"init": "EPSG:4326"})) == (
@@ -220,7 +277,7 @@ def test_repr():
             "Area of Use:\n"
             "- name: World.\n"
             "- bounds: (-180.0, -90.0, 180.0, 90.0)\n"
-            f"Datum: {get_wgs84_datum_name()}\n"
+            "Datum: World Geodetic System 1984 ensemble\n"
             "- Ellipsoid: WGS 84\n"
             "- Prime Meridian: Greenwich\n"
         )
@@ -228,10 +285,7 @@ def test_repr():
 
 def test_repr__long():
     with pytest.warns(FutureWarning):
-        if PROJ_GTE_8:
-            wkt_str = 'GEOGCRS["WGS 84",ENSEMBLE["World Geodetic System 1'
-        else:
-            wkt_str = 'GEOGCRS["WGS 84",DATUM["World Geodetic System 1984'
+        wkt_str = 'GEOGCRS["WGS 84",ENSEMBLE["World Geodetic System 1'
         assert repr(CRS(CRS({"init": "EPSG:4326"}).to_wkt())) == (
             f"<Geographic 2D CRS: {wkt_str} ...>\n"
             "Name: WGS 84\n"
@@ -241,7 +295,7 @@ def test_repr__long():
             "Area of Use:\n"
             "- name: World.\n"
             "- bounds: (-180.0, -90.0, 180.0, 90.0)\n"
-            f"Datum: {get_wgs84_datum_name()}\n"
+            "Datum: World Geodetic System 1984 ensemble\n"
             "- Ellipsoid: WGS 84\n"
             "- Prime Meridian: Greenwich\n"
         )
@@ -257,13 +311,16 @@ def test_repr_epsg():
         "Area of Use:\n"
         "- name: World.\n"
         "- bounds: (-180.0, -90.0, 180.0, 90.0)\n"
-        f"Datum: {get_wgs84_datum_name()}\n"
+        "Datum: World Geodetic System 1984 ensemble\n"
         "- Ellipsoid: WGS 84\n"
         "- Prime Meridian: Greenwich\n"
     )
 
 
 def test_repr__undefined():
+    datum_name = "unknown"
+    if PROJ_GTE_901:
+        datum_name = f"{datum_name} using nadgrids=@null"
     assert repr(
         CRS(
             "+proj=merc +a=6378137.0 +b=6378137.0 +nadgrids=@null"
@@ -280,7 +337,7 @@ def test_repr__undefined():
         "Coordinate Operation:\n"
         "- name: unknown to WGS84\n"
         "- method: NTv2\n"
-        "Datum: unknown\n"
+        f"Datum: {datum_name}\n"
         "- Ellipsoid: unknown\n"
         "- Prime Meridian: Greenwich\n"
         "Source CRS: unknown\n"
@@ -332,10 +389,7 @@ def test_epsg():
 def test_datum():
     datum = CRS.from_epsg(4326).datum
     assert "\n" in repr(datum)
-    if PROJ_GTE_8:
-        datum_wkt = 'ENSEMBLE["World Geodetic System 1984 ensemble"'
-    else:
-        datum_wkt = 'DATUM["World Geodetic System 1984"'
+    datum_wkt = 'ENSEMBLE["World Geodetic System 1984 ensemble"'
     assert repr(datum).startswith(datum_wkt)
     assert datum.to_wkt().startswith(datum_wkt)
     assert datum == datum
@@ -353,7 +407,12 @@ def test_datum_unknown():
         "+k=1 +x_0=0 +y_0=0 +gamma=0 +ellps=WGS84 "
         "+towgs84=0,0,0,0,0,0,0 +units=m +no_defs"
     )
-    assert crs.datum.name == "Unknown based on WGS84 ellipsoid"
+    datum_name = "Unknown based on WGS84 ellipsoid"
+    if PROJ_GTE_921:
+        datum_name = "Unknown based on WGS 84 ellipsoid"
+    if PROJ_GTE_901:
+        datum_name = f"{datum_name} using towgs84=0,0,0,0,0,0,0"
+    assert crs.datum.name == datum_name
 
 
 def test_epsg__not_found():
@@ -378,7 +437,7 @@ def test_crs_OSR_equivalence():
     with pytest.warns(FutureWarning):
         crs3 = CRS({"init": "EPSG:4326"})
     assert crs1 == crs2
-    # these are not equivalent in proj.4 now as one uses degrees and the othe radians
+    # these are not equivalent in proj.4 now as one uses degrees and the other radians
     assert crs1 == crs3
 
 
@@ -588,14 +647,22 @@ def test_coordinate_operation_grids__alternative_grid_name():
     assert grid.direct_download is True
     assert grid.open_license is True
     assert grid.short_name == "ca_nrc_ntv1_can.tif"
-    if grids_available(grid.short_name):
+    assert grid.package_name == ""
+    assert grid.url == "https://cdn.proj.org/ca_nrc_ntv1_can.tif"
+    if (PROJ_GTE_91 and grids_available(grid.short_name, check_network=False)) or (
+        not PROJ_GTE_91 and grids_available(grid.short_name)
+    ):
         assert grid.available is True
         assert grid.full_name.endswith(grid.short_name)
+    elif PROJ_GTE_911 and pyproj.network.is_network_enabled():
+        assert grid.available is True
+        assert grid.full_name == grid.url
+    elif PROJ_GTE_91 and pyproj.network.is_network_enabled():
+        assert grid.available is True
+        assert grid.full_name == ""
     else:
         assert grid.available is False
         assert grid.full_name == ""
-    assert grid.package_name == ""
-    assert grid.url == "https://cdn.proj.org/ca_nrc_ntv1_can.tif"
 
 
 def test_coordinate_operation__missing():
@@ -623,7 +690,7 @@ def test_coordinate_operation__from_authority():
         "urn:ogc:def:coordinateOperation:EPSG::1671",
         CoordinateOperation.from_epsg(1671),
         CoordinateOperation.from_epsg(1671).to_json_dict(),
-        "RGF93 to WGS 84 (1)",
+        "RGF93 v1 to WGS 84 (1)",
     ],
 )
 def test_coordinate_operation__from_user_input(user_input):
@@ -648,31 +715,24 @@ def test_coordinate_operation__from_authority__empty():
 
 
 def test_datum__from_epsg():
-    if PROJ_GTE_8:
-        datum_wkt = (
-            'ENSEMBLE["World Geodetic System 1984 ensemble",'
-            'MEMBER["World Geodetic System 1984 (Transit)",'
-            'ID["EPSG",1166]],MEMBER["World Geodetic System 1984 (G730)",'
-            'ID["EPSG",1152]],MEMBER["World Geodetic System 1984 (G873)",'
-            'ID["EPSG",1153]],MEMBER["World Geodetic System 1984 (G1150)",'
-            'ID["EPSG",1154]],MEMBER["World Geodetic System 1984 (G1674)",'
-            'ID["EPSG",1155]],MEMBER["World Geodetic System 1984 (G1762)",'
-            'ID["EPSG",1156]],ELLIPSOID["WGS 84",6378137,298.257223563,'
-            'LENGTHUNIT["metre",1],ID["EPSG",7030]],'
-            'ENSEMBLEACCURACY[2.0],ID["EPSG",6326]]'
-        )
-    else:
-        datum_wkt = (
-            'DATUM["World Geodetic System 1984",'
-            'ELLIPSOID["WGS 84",6378137,298.257223563,'
-            'LENGTHUNIT["metre",1]],ID["EPSG",6326]]'
-        )
+    datum_wkt = (
+        'ENSEMBLE["World Geodetic System 1984 ensemble",'
+        'MEMBER["World Geodetic System 1984 (Transit)",ID["EPSG",1166]],'
+        'MEMBER["World Geodetic System 1984 (G730)",ID["EPSG",1152]],'
+        'MEMBER["World Geodetic System 1984 (G873)",ID["EPSG",1153]],'
+        'MEMBER["World Geodetic System 1984 (G1150)",ID["EPSG",1154]],'
+        'MEMBER["World Geodetic System 1984 (G1674)",ID["EPSG",1155]],'
+        'MEMBER["World Geodetic System 1984 (G1762)",ID["EPSG",1156]],'
+        'MEMBER["World Geodetic System 1984 (G2139)",ID["EPSG",1309]],'
+        'ELLIPSOID["WGS 84",6378137,298.257223563,LENGTHUNIT["metre",1],'
+        'ID["EPSG",7030]],ENSEMBLEACCURACY[2.0],ID["EPSG",6326]]'
+    )
     assert Datum.from_epsg("6326").to_wkt() == datum_wkt
 
 
 def test_datum__from_authority():
     dt = Datum.from_authority("EPSG", 6326)
-    assert dt.name == get_wgs84_datum_name()
+    assert dt.name == "World Geodetic System 1984 ensemble"
 
 
 def test_datum__from_epsg__invalid():
@@ -690,9 +750,7 @@ def test_datum__from_authority__invalid():
     [
         6326,
         ("EPSG", 6326),
-        "urn:ogc:def:ensemble:EPSG::6326"
-        if PROJ_GTE_8
-        else "urn:ogc:def:datum:EPSG::6326",
+        "urn:ogc:def:ensemble:EPSG::6326",
         Datum.from_epsg(6326),
         Datum.from_epsg(6326).to_json_dict(),
         "World Geodetic System 1984",
@@ -896,6 +954,50 @@ def test_to_wkt_enum__invalid():
         crs.to_wkt("WKT_INVALID")
 
 
+@pytest.mark.parametrize(
+    "wkt_version",
+    ["WKT2_2015", "WKT2_2015_SIMPLIFIED", "WKT1_GDAL", "WKT1_ESRI"],
+)
+def test_to_wkt_none_warning(wkt_version):
+    wkt_string = (
+        'PROJCRS["unknown",BASEGEOGCRS["unknown",DATUM["unknown",'
+        'ELLIPSOID["WGS 84",6378137,298.257223563,LENGTHUNIT["metre",1,'
+        'ID["EPSG",9001]]]],PRIMEM["Greenwich",0,ANGLEUNIT["degree",0.0174532925199],'
+        'ID["EPSG",8901]]],CONVERSION["unknown",METHOD["Equidistant Cylindrical",'
+        'ID["EPSG",1028]],PARAMETER["Latitude of 1st standard parallel",0,'
+        'ANGLEUNIT["degree",0.0174532925199433],ID["EPSG",8823]],'
+        'PARAMETER["Longitude of natural origin",0,ANGLEUNIT["degree",0.0174532925199],'
+        'ID["EPSG",8802]],PARAMETER["False easting",0,'
+        'LENGTHUNIT["unknown",111319.490793274],ID["EPSG",8806]],'
+        'PARAMETER["False northing",0,LENGTHUNIT["unknown",111319.490793274],'
+        'ID["EPSG",8807]]],CS[Cartesian,3],AXIS["(E)",east,ORDER[1],'
+        'LENGTHUNIT["unknown",111319.490793274]],AXIS["(N)",north,ORDER[2],'
+        'LENGTHUNIT["unknown",111319.490793274]],AXIS["ellipsoidal height (h)",up,'
+        'ORDER[3],LENGTHUNIT["metre",1,ID["EPSG",9001]]]]'
+    )
+    crs = CRS.from_wkt(wkt_string)
+    with pytest.raises(CRSError, match="CRS cannot be converted to a WKT string"):
+        assert crs.to_wkt(version=wkt_version) is None
+
+
+def test_to_proj4_none_warning():
+    crs = CRS("EPSG:4326")
+    with patch("pyproj.crs.crs.CRS._crs") as crs_mock, pytest.raises(
+        CRSError, match="CRS cannot be converted to a PROJ string"
+    ):
+        crs_mock.to_proj4.return_value = None
+        assert crs.to_proj4() is None
+
+
+def test_to_json_none_warning():
+    crs = CRS("EPSG:4326")
+    with patch("pyproj.crs.crs.CRS._crs") as crs_mock, pytest.raises(
+        CRSError, match="CRS cannot be converted to a PROJ JSON string"
+    ):
+        crs_mock.to_json.return_value = None
+        assert crs.to_json() is None
+
+
 def test_to_proj4_enum():
     crs = CRS.from_epsg(4326)
     with pytest.warns(UserWarning):
@@ -913,20 +1015,14 @@ def test_datum_equals():
 @pytest.mark.parametrize(
     "input_str",
     [
-        "urn:ogc:def:ensemble:EPSG::6326"
-        if PROJ_GTE_8
-        else "urn:ogc:def:datum:EPSG::6326",
+        "urn:ogc:def:ensemble:EPSG::6326",
         "World Geodetic System 1984",
     ],
 )
 def test_datum__from_string(input_str):
     dd = Datum.from_string(input_str)
-    if PROJ_GTE_8:
-        assert dd.name == "World Geodetic System 1984 ensemble"
-        assert dd.type_name == "Datum Ensemble"
-    else:
-        assert dd.name == "World Geodetic System 1984"
-        assert dd.type_name == "Geodetic Reference Frame"
+    assert dd.name == "World Geodetic System 1984 ensemble"
+    assert dd.type_name == "Datum Ensemble"
 
 
 @pytest.mark.parametrize(
@@ -951,7 +1047,7 @@ def test_datum__from_string__type_name(input_str, type_name):
 )
 def test_datum__from_name(input_name):
     dd = Datum.from_name(input_name)
-    assert dd.name == get_wgs84_datum_name()
+    assert dd.name == "World Geodetic System 1984 ensemble"
 
 
 @pytest.mark.parametrize("auth_name", [None, "ESRI"])
@@ -1009,8 +1105,11 @@ def test_ellipsoid__from_string(input_str):
     "input_str,long_name",
     [
         ("Airy 1830", "Airy 1830"),
-        ("intl", HAYFORD_ELLIPSOID_NAME),
-        (HAYFORD_ELLIPSOID_NAME, HAYFORD_ELLIPSOID_NAME),
+        ("intl", "International 1924 (Hayford 1909, 1910)"),
+        (
+            "International 1924 (Hayford 1909, 1910)",
+            "International 1924 (Hayford 1909, 1910)",
+        ),
     ],
 )
 def test_ellipsoid__from_name(input_str, long_name):
@@ -1073,11 +1172,12 @@ def test_coordinate_operation_equals():
 
 
 @pytest.mark.parametrize(
-    "input_str", ["urn:ogc:def:coordinateOperation:EPSG::1671", "RGF93 to WGS 84 (1)"]
+    "input_str",
+    ["urn:ogc:def:coordinateOperation:EPSG::1671", "RGF93 v1 to WGS 84 (1)"],
 )
 def test_coordinate_operation__from_string(input_str):
     co = CoordinateOperation.from_string(input_str)
-    assert co.name == "RGF93 to WGS 84 (1)"
+    assert co.name == "RGF93 v1 to WGS 84 (1)"
 
 
 def test_coordinate_operation__from_name():
@@ -1205,6 +1305,52 @@ def test_crs_is_exact_same__non_crs_input():
     assert CRS(4326).is_exact_same("epsg:4326")
     with pytest.warns(FutureWarning):
         assert not CRS(4326).is_exact_same("+init=epsg:4326")
+
+
+def test_derived_projected_crs():
+    wkt = (
+        'DERIVEDPROJCRS["derived projectedCRS",\n'
+        '    BASEPROJCRS["WGS 84 / UTM zone 31N",\n'
+        '        BASEGEOGCRS["WGS 84",\n'
+        '            DATUM["World Geodetic System 1984",\n'
+        '                ELLIPSOID["WGS 84",6378137,298.257223563,\n'
+        '                    LENGTHUNIT["metre",1]]],\n'
+        '            PRIMEM["Greenwich",0,\n'
+        '                ANGLEUNIT["degree",0.0174532925199433]]],\n'
+        '        CONVERSION["UTM zone 31N",\n'
+        '            METHOD["Transverse Mercator",\n'
+        '                ID["EPSG",9807]],\n'
+        '            PARAMETER["Latitude of natural origin",0,\n'
+        '                ANGLEUNIT["degree",0.0174532925199433],\n'
+        '                ID["EPSG",8801]],\n'
+        '            PARAMETER["Longitude of natural origin",3,\n'
+        '                ANGLEUNIT["degree",0.0174532925199433],\n'
+        '                ID["EPSG",8802]],\n'
+        '            PARAMETER["Scale factor at natural origin",0.9996,\n'
+        '                SCALEUNIT["unity",1],\n'
+        '                ID["EPSG",8805]],\n'
+        '            PARAMETER["False easting",500000,\n'
+        '                LENGTHUNIT["metre",1],\n'
+        '                ID["EPSG",8806]],\n'
+        '            PARAMETER["False northing",0,\n'
+        '                LENGTHUNIT["metre",1],\n'
+        '                ID["EPSG",8807]]]],\n'
+        '    DERIVINGCONVERSION["unnamed",\n'
+        '        METHOD["PROJ unimplemented"],\n'
+        '        PARAMETER["foo",1.0,UNIT["metre",1]]],\n'
+        "    CS[Cartesian,2],\n"
+        '        AXIS["(E)",east,\n'
+        "            ORDER[1],\n"
+        '            LENGTHUNIT["metre",1,\n'
+        '                ID["EPSG",9001]]],\n'
+        '        AXIS["(N)",north,\n'
+        "            ORDER[2],\n"
+        '            LENGTHUNIT["metre",1,\n'
+        '                ID["EPSG",9001]]]]'
+    )
+    crs = CRS(wkt)
+    assert crs.is_derived
+    assert crs.type_name == "Derived Projected CRS"
 
 
 def test_to_string__no_auth():
@@ -1442,6 +1588,9 @@ def test_crs_multithread():
             pass
 
 
+@pytest.mark.skipif(
+    platform.python_implementation() != "CPython", reason="pypy process unstable."
+)
 def test_crs_multiprocess():
     # https://github.com/pyproj4/pyproj/issues/933
     with concurrent.futures.ProcessPoolExecutor(max_workers=2) as executor:
@@ -1494,6 +1643,36 @@ def test_to_3d(crs_input):
 def test_to_3d__name():
     crs_3d = CRS("EPSG:2056").to_3d(name="TEST")
     assert crs_3d.name == "TEST"
+
+
+@pytest.mark.parametrize(
+    "crs_input",
+    [
+        CRS("EPSG:4979"),  # native 3D
+        CRS("EPSG:2056").to_3d(),  # a 2D CRS converted to 3D
+        CRS("EPSG:4326+5773"),  # a 3D CRS based on a compound
+    ],
+)
+def test_to_2d(crs_input):
+    assert len(crs_input.axis_info) == 3
+    horizon_axis_crs_3d = crs_input.axis_info[:-1]
+    crs_2d = crs_input.to_2d()
+    horizon_axis_crs_2d = crs_input.axis_info
+    assert len(crs_2d.axis_info) == 2
+    assert horizon_axis_crs_2d[0] == horizon_axis_crs_3d[0]
+    assert horizon_axis_crs_2d[1] == horizon_axis_crs_3d[1]
+    assert crs_2d.to_2d() == crs_2d
+    # For CompoundCRS, the 3D name is initialized different from 2D
+    if crs_input.name == "WGS 84 + EGM96 height":
+        assert crs_2d.name == "WGS 84"
+    # Otherwise, no change
+    else:
+        assert crs_2d.name == crs_input.name
+
+
+def test_to_2d__name():
+    crs_2d = CRS("EPSG:2056").to_3d().to_2d(name="TEST")
+    assert crs_2d.name == "TEST"
 
 
 def test_crs__pickle(tmp_path):

@@ -1,18 +1,20 @@
 import os
 import platform
+import re
 import shutil
 import subprocess
 import sys
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Optional
 
 from pkg_resources import parse_version
 from setuptools import Extension, setup
 
-PROJ_MIN_VERSION = parse_version("7.2.0")
+PROJ_MIN_VERSION = parse_version("9.0.0")
 CURRENT_FILE_PATH = Path(__file__).absolute().parent
 BASE_INTERNAL_PROJ_DIR = Path("proj_dir")
 INTERNAL_PROJ_DIR = CURRENT_FILE_PATH / "pyproj" / BASE_INTERNAL_PROJ_DIR
+PROJ_VERSION_SEARCH = re.compile(r".*Rel\.\s+(?P<version>\d+\.\d+\.\d+).*")
 
 
 def get_proj_version(proj_dir: Path) -> str:
@@ -23,7 +25,13 @@ def get_proj_version(proj_dir: Path) -> str:
     proj_ver = subprocess.check_output(str(proj), stderr=subprocess.STDOUT).decode(
         "ascii"
     )
-    return (proj_ver.split()[1]).strip(",")
+    match = PROJ_VERSION_SEARCH.search(proj_ver)
+    if not match:
+        raise SystemExit(
+            "PROJ version unable to be determined. "
+            "Please set the PROJ_VERSION environment variable."
+        )
+    return match.groupdict()["version"]
 
 
 def check_proj_version(proj_version: str) -> None:
@@ -65,7 +73,7 @@ def get_proj_dir() -> Path:
     return proj_dir
 
 
-def get_proj_libdirs(proj_dir: Path) -> List[str]:
+def get_proj_libdirs(proj_dir: Path) -> list[str]:
     """
     This function finds the library directories
     """
@@ -85,7 +93,7 @@ def get_proj_libdirs(proj_dir: Path) -> List[str]:
     return libdirs
 
 
-def get_proj_incdirs(proj_dir: Path) -> List[str]:
+def get_proj_incdirs(proj_dir: Path) -> list[str]:
     """
     This function finds the include directories
     """
@@ -122,7 +130,7 @@ def get_cythonize_options():
     return cythonize_options
 
 
-def get_libraries(libdirs: List[str]) -> List[str]:
+def get_libraries(libdirs: list[str]) -> list[str]:
     """
     This function gets the libraries to cythonize with
     """
@@ -167,7 +175,9 @@ def get_extension_modules():
     ext_options = {
         "include_dirs": include_dirs,
         "library_dirs": library_dirs,
-        "runtime_library_dirs": library_dirs if os.name != "nt" else None,
+        "runtime_library_dirs": (
+            library_dirs if os.name != "nt" and sys.platform != "cygwin" else None
+        ),
         "libraries": get_libraries(library_dirs),
     }
     # setup cythonized modules
@@ -196,7 +206,7 @@ def get_extension_modules():
     )
 
 
-def get_package_data() -> Dict[str, List[str]]:
+def get_package_data() -> dict[str, list[str]]:
     """
     This function retrieves the package data
     """
@@ -214,21 +224,10 @@ def get_package_data() -> Dict[str, List[str]]:
     return package_data
 
 
-def get_version():
-    """
-    retreive pyproj version information (taken from Fiona)
-    """
-    with open(Path("pyproj", "__init__.py"), "r") as f:
-        for line in f:
-            if line.find("__version__") >= 0:
-                # parse __version__ and remove surrounding " or '
-                return line.split("=")[1].strip()[1:-1]
-    raise SystemExit("ERROR: pyproj version not found.")
-
-
-# static items in setup.cfg
+# static items in pyproject.toml
 setup(
-    version=get_version(),
     ext_modules=get_extension_modules(),
     package_data=get_package_data(),
+    # temptorary hack to add in metadata
+    url="https://github.com/pyproj4/pyproj",
 )

@@ -1,3 +1,130 @@
+python-pyproj (3.6.0-2) UNRELEASED; urgency=medium
+
+  * Use autopkgtest-pkg-pybuild testsuite.
+  * Enable Salsa CI.
+
+ -- Bas Couwenberg <sebastic@debian.org>  Sun, 16 Jul 2023 17:03:16 +0200
+
+python-pyproj (3.6.0-1) unstable; urgency=medium
+
+  * New upstream release.
+  * Bump debhelper compat to 13.
+  * Move from experimental to unstable.
+
+ -- Bas Couwenberg <sebastic@debian.org>  Tue, 13 Jun 2023 05:25:49 +0200
+
+python-pyproj (3.6.0~rc0-1~exp1) experimental; urgency=medium
+
+  * New upstream release candidate.
+
+ -- Bas Couwenberg <sebastic@debian.org>  Fri, 09 Jun 2023 06:15:46 +0200
+
+python-pyproj (3.5.0-1~exp1) experimental; urgency=medium
+
+  * New upstream release.
+  * Drop xfail.patch, fixed upstream.
+
+ -- Bas Couwenberg <sebastic@debian.org>  Tue, 28 Mar 2023 05:23:35 +0200
+
+python-pyproj (3.5.0~rc0-1~exp1) experimental; urgency=medium
+
+  * New upstream release candidate.
+  * Enable numpy3 dh helper.
+  * Bump Standards-Version to 4.6.2, no changes.
+  * Update copyright file.
+  * Bump minimum required PROJ to 9.0.0.
+  * Add patch to ignore certain test failures.
+
+ -- Bas Couwenberg <sebastic@debian.org>  Sat, 25 Mar 2023 07:32:10 +0100
+
+python-pyproj (3.4.1-1) unstable; urgency=medium
+
+  * New upstream release.
+
+ -- Bas Couwenberg <sebastic@debian.org>  Tue, 13 Dec 2022 09:04:12 +0100
+
+python-pyproj (3.4.1~rc0-1~exp1) unstable; urgency=medium
+
+  * New upstream release candidate.
+
+ -- Bas Couwenberg <sebastic@debian.org>  Sat, 10 Dec 2022 07:58:36 +0100
+
+python-pyproj (3.4.0-2) unstable; urgency=medium
+
+  * Add Rules-Requires-Root to control file.
+  * Add patch to not set RPATH in libraries.
+
+ -- Bas Couwenberg <sebastic@debian.org>  Thu, 01 Dec 2022 17:26:42 +0100
+
+python-pyproj (3.4.0-1) unstable; urgency=medium
+
+  * New upstream release.
+  * Move from experimental to unstable.
+
+ -- Bas Couwenberg <sebastic@debian.org>  Sat, 10 Sep 2022 06:34:52 +0200
+
+python-pyproj (3.4.0~rc2-1~exp1) experimental; urgency=medium
+
+  * New upstream release candidate.
+  * Drop setuptools.patch, applied upstream.
+
+ -- Bas Couwenberg <sebastic@debian.org>  Fri, 09 Sep 2022 06:40:27 +0200
+
+python-pyproj (3.4.0~rc1-1~exp1) experimental; urgency=medium
+
+  * New upstream release candidate.
+  * Unconditionally use PROJ_DATA.
+  * Bump minimum required PROJ to 8.2.0.
+  * Drop pr1099-PROJ_DATA.patch, included upstream.
+  * Add pybuild-plugin-pyproject to build dependencies.
+
+ -- Bas Couwenberg <sebastic@debian.org>  Thu, 08 Sep 2022 08:23:17 +0200
+
+python-pyproj (3.3.1-2) unstable; urgency=medium
+
+  * Bump Standards-Version to 4.6.1, no changes.
+  * Add upstream patch to support PROJ_DATA.
+  * Export PROJ_DATA in rules for PROJ >= 9.1.0~.
+
+ -- Bas Couwenberg <sebastic@debian.org>  Sat, 27 Aug 2022 19:37:41 +0200
+
+python-pyproj (3.3.1-1) unstable; urgency=medium
+
+  * New upstream release.
+  * Move from experimental to unstable.
+
+ -- Bas Couwenberg <sebastic@debian.org>  Fri, 22 Apr 2022 06:31:37 +0200
+
+python-pyproj (3.3.1~rc0-1~exp1) experimental; urgency=medium
+
+  * New upstream release candidate.
+  * Update copyright file.
+
+ -- Bas Couwenberg <sebastic@debian.org>  Thu, 21 Apr 2022 05:23:46 +0200
+
+python-pyproj (3.3.0-2) unstable; urgency=medium
+
+  * Build for all supported Python versions again.
+    (closes: #1000899)
+
+ -- Bas Couwenberg <sebastic@debian.org>  Fri, 03 Dec 2021 07:35:51 +0100
+
+python-pyproj (3.3.0-1) unstable; urgency=medium
+
+  * New upstream release.
+  * Only build for the default Python, numpy has not been built with 3.10 yet.
+  * Move from experimental to unstable.
+
+ -- Bas Couwenberg <sebastic@debian.org>  Thu, 18 Nov 2021 06:24:23 +0100
+
+python-pyproj (3.3~rc0-1~exp1) experimental; urgency=medium
+
+  * New upstream release candidate.
+  * Drop proj-8.2.patch, fixed upstream.
+  * Bump minimum required PROJ to 8.0.0.
+
+ -- Bas Couwenberg <sebastic@debian.org>  Sun, 14 Nov 2021 06:14:51 +0100
+
 python-pyproj (3.2.1-2) unstable; urgency=medium
 
   * Add patch to fix test failures with PROJ 8.2.0.

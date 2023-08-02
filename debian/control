@@ -4,11 +4,12 @@ Uploaders: David Paleino <dapal@debian.org>,
            Bas Couwenberg <sebastic@debian.org>
 Section: python
 Priority: optional
-Build-Depends: debhelper-compat (= 12),
+Build-Depends: debhelper-compat (= 13),
                dh-python,
                cython3,
-               libproj-dev (>= 7.1.0),
-               proj-bin (>= 7.1.0),
+               libproj-dev (>= 9.0.0),
+               proj-bin (>= 9.0.0),
+               pybuild-plugin-pyproject,
                python3-all-dev,
                python3-certifi,
                python3-setuptools,
@@ -20,10 +21,12 @@ Build-Depends: debhelper-compat (= 12),
                python3-pytest-cov,
                python3-shapely,
                python3-xarray
-Standards-Version: 4.6.0
+Standards-Version: 4.6.2
 Vcs-Browser: https://salsa.debian.org/debian-gis-team/python-pyproj
 Vcs-Git: https://salsa.debian.org/debian-gis-team/python-pyproj.git
 Homepage: https://github.com/pyproj4/pyproj
+Rules-Requires-Root: no
+Testsuite: autopkgtest-pkg-pybuild
 
 Package: python3-pyproj
 Architecture: any
