@@ -1,6 +1,12 @@
 Change Log
 ==========
 
+3.6.1
+------
+- WHL: Wheels contain PROJ 9.3.0 (issue #1327)
+- BUG: Remove pkg_resources from setup.py (issue #1313)
+- BUG: Cython 3 compatibility fixes (issue #1321)
+
 3.6.0
 ------
 - DEP: Minimum supported Python version 3.9 (issue #1111)

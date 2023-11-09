@@ -19,12 +19,12 @@ optimize your transformations.
 
 .. code-block:: python
 
-    import numpy as np
+    import numpy
     from pyproj import Transformer, transform
 
     transformer = Transformer.from_crs(2263, 4326)
-    x_coords = np.random.randint(80000, 120000)
-    y_coords = np.random.randint(200000, 250000)
+    x_coords = numpy.random.randint(80000, 120000)
+    y_coords = numpy.random.randint(200000, 250000)
 
 
 Example with :func:`pyproj.transformer.transform`:
@@ -202,7 +202,7 @@ As of version 3.1, these objects are thread-safe:
 - :class:`pyproj.crs.CRS`
 - :class:`pyproj.transformer.Transformer`
 
-If you have pyproj<3.1, you will need to create create the object
+If you have pyproj<3.1, you will need to create the object
 within the thread that uses it.
 
 Here is a simple demonstration:
