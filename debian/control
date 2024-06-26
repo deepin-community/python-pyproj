@@ -15,14 +15,12 @@ Build-Depends: debhelper-compat (= 13),
                python3-all-dev,
                python3-certifi,
                python3-setuptools,
-               python3-mock,
                python3-numpy,
                python3-packaging,
                python3-pandas,
                python3-pytest,
                python3-pytest-cov,
-               python3-shapely,
-               python3-xarray
+               python3-shapely
 Standards-Version: 4.6.2
 Vcs-Browser: https://salsa.debian.org/debian-gis-team/python-pyproj
 Vcs-Git: https://salsa.debian.org/debian-gis-team/python-pyproj.git

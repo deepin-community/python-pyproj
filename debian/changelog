@@ -1,3 +1,24 @@
+python-pyproj (3.6.1-4) unstable; urgency=medium
+
+  * Drop obsolete python3-mock build dependency.
+    (closes: #1066144)
+  * Add patch to fix FTBFS with PROJ 9.4.1.
+
+ -- Bas Couwenberg <sebastic@debian.org>  Wed, 29 May 2024 09:40:18 +0200
+
+python-pyproj (3.6.1-3) unstable; urgency=medium
+
+  * Add upstream patch to fix FTBFS with PROJ 9.4.0.
+
+ -- Bas Couwenberg <sebastic@debian.org>  Wed, 28 Feb 2024 05:27:39 +0100
+
+python-pyproj (3.6.1-2) unstable; urgency=medium
+
+  * Drop RC-buggy python3-xarray from build dependencies.
+    (closes: #1055843)
+
+ -- Bas Couwenberg <sebastic@debian.org>  Sun, 12 Nov 2023 16:16:37 +0100
+
 python-pyproj (3.6.1-1) unstable; urgency=medium
 
   * New upstream release.

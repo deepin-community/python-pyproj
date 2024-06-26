@@ -1,0 +1,15 @@
+Description: Support azimuthal_equidistant coordinate operation to CF
+Author: snowman2 <alansnow21@gmail.com>
+Origin: https://github.com/pyproj4/pyproj/pull/1380
+Bug: https://github.com/pyproj4/pyproj/issues/1384
+
+--- a/pyproj/crs/_cf1x8.py
++++ b/pyproj/crs/_cf1x8.py
+@@ -658,6 +658,7 @@ def _pole_rotation_netcdf__to_cf(conversion):
+ _INVERSE_GRID_MAPPING_NAME_MAP = {
+     "albers_equal_area": _albers_conical_equal_area__to_cf,
+     "modified_azimuthal_equidistant": _azimuthal_equidistant__to_cf,
++    "azimuthal_equidistant": _azimuthal_equidistant__to_cf,
+     "geostationary_satellite_(sweep_x)": _geostationary__to_cf,
+     "geostationary_satellite_(sweep_y)": _geostationary__to_cf,
+     "lambert_azimuthal_equal_area": _lambert_azimuthal_equal_area__to_cf,
