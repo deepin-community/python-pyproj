@@ -1,7 +1,6 @@
 import concurrent.futures
 import math
 import os
-import sys
 import unittest
 from unittest.mock import patch
 
@@ -159,9 +158,6 @@ class ProjLatLongTypeErrorTest(unittest.TestCase):
             lon, lat = transform(p, p.to_latlong(), 200000, 400000)
 
 
-@unittest.skipIf(
-    sys.version_info < (3, 4), "Python 3.4 or newer required for subTest()"
-)
 class ForwardInverseTest(unittest.TestCase):
     def test_fwd_inv(self):
         for pj in pj_list.keys():
@@ -232,7 +228,7 @@ class ReprTests(unittest.TestCase):
     def test_sphere(self):
         # ellipse is Venus 2000 (IAU2000:29900), which is a sphere
         g = Geod("+a=6051800 +b=6051800")
-        self.assertEqual(repr(g), "Geod('+a=6051800 +f=0')")
+        self.assertEqual(repr(g), "Geod('+a=6051800.0 +f=0.0')")
 
     # test __repr__ for Geod object
     def test_ellps_name_round_trip(self):
@@ -589,9 +585,6 @@ def test_radians():
     )
 
 
-@pytest.mark.skipif(
-    pyproj._datadir._USE_GLOBAL_CONTEXT, reason="Global Context not Threadsafe."
-)
 def test_proj_multithread():
     # https://github.com/pyproj4/pyproj/issues/782
     trans = Proj("EPSG:3857")

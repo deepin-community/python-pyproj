@@ -5,11 +5,10 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
-from typing import Optional
 
 from setuptools import Extension, setup
 
-PROJ_MIN_VERSION = (9, 0, 0)
+PROJ_MIN_VERSION = (9, 2, 0)
 CURRENT_FILE_PATH = Path(__file__).absolute().parent
 BASE_INTERNAL_PROJ_DIR = Path("proj_dir")
 INTERNAL_PROJ_DIR = CURRENT_FILE_PATH / "pyproj" / BASE_INTERNAL_PROJ_DIR
@@ -70,7 +69,7 @@ def get_proj_dir() -> Path:
     This function finds the base PROJ directory.
     """
     proj_dir_environ = os.environ.get("PROJ_DIR")
-    proj_dir: Optional[Path] = None
+    proj_dir: Path | None = None
     if proj_dir_environ is not None:
         proj_dir = Path(proj_dir_environ)
     if proj_dir is None and INTERNAL_PROJ_DIR.exists():
@@ -209,10 +208,11 @@ def get_extension_modules():
             ),
             Extension("pyproj._compat", ["pyproj/_compat.pyx"], **ext_options),
             Extension("pyproj.database", ["pyproj/database.pyx"], **ext_options),
-            Extension("pyproj._datadir", ["pyproj/_datadir.pyx"], **ext_options),
+            Extension("pyproj._context", ["pyproj/_context.pyx"], **ext_options),
             Extension("pyproj.list", ["pyproj/list.pyx"], **ext_options),
             Extension("pyproj._network", ["pyproj/_network.pyx"], **ext_options),
             Extension("pyproj._sync", ["pyproj/_sync.pyx"], **ext_options),
+            Extension("pyproj._version", ["pyproj/_version.pyx"], **ext_options),
         ],
         quiet=True,
         compile_time_env={

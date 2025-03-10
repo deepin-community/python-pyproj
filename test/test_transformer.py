@@ -2,7 +2,6 @@ import concurrent.futures
 import os
 import pickle
 from array import array
-from contextlib import nullcontext
 from functools import partial
 from glob import glob
 from itertools import permutations
@@ -19,14 +18,7 @@ from pyproj.datadir import append_data_dir
 from pyproj.enums import TransformDirection
 from pyproj.exceptions import ProjError
 from pyproj.transformer import AreaOfInterest, TransformerGroup
-from test.conftest import (
-    PROJ_GTE_91,
-    PROJ_GTE_92,
-    PROJ_GTE_93,
-    grids_available,
-    proj_env,
-    proj_network_env,
-)
+from test.conftest import PROJ_GTE_93, grids_available, proj_env, proj_network_env
 
 
 def test_tranform_wgs84_to_custom():
@@ -240,8 +232,9 @@ def test_2d_with_time_itransform_original_crs_obs2():
 
 
 def test_itransform_time_3rd_invalid():
-    with pytest.warns(FutureWarning), pytest.raises(
-        ValueError, match="'time_3rd' is only valid for 3 coordinates."
+    with (
+        pytest.warns(FutureWarning),
+        pytest.raises(ValueError, match="'time_3rd' is only valid for 3 coordinates."),
     ):
         list(
             itransform(
@@ -251,8 +244,9 @@ def test_itransform_time_3rd_invalid():
                 time_3rd=True,
             )
         )
-    with pytest.warns(FutureWarning), pytest.raises(
-        ValueError, match="'time_3rd' is only valid for 3 coordinates."
+    with (
+        pytest.warns(FutureWarning),
+        pytest.raises(ValueError, match="'time_3rd' is only valid for 3 coordinates."),
     ):
         list(itransform(7789, 8401, [(3496737.2679, 743254.4507)], time_3rd=True))
 
@@ -541,7 +535,7 @@ def test_repr__conditional():
             "Description: unavailable until proj_trans is called\n"
             "Area of Use:\n- undefined"
         )
-    elif PROJ_GTE_92 and not PROJ_GTE_93:
+    elif not PROJ_GTE_93:
         assert trans_repr == (
             "<Unknown Transformer: noop>\n"
             "Description: Transformation from EGM2008 height to WGS 84 "
@@ -556,7 +550,7 @@ def test_repr__conditional():
             "(ballpark vertical transformation, without ellipsoid height "
             "to vertical height correction)\n"
             "Area of Use:\n"
-            f"- name: World{'.' if PROJ_GTE_93 else ''}\n"
+            "- name: World.\n"
             "- bounds: (-180.0, -90.0, 180.0, 90.0)"
         )
 
@@ -619,16 +613,13 @@ def test_transformer__operations__scope_remarks():
 
 @pytest.mark.grid
 def test_transformer__only_best():
-    with nullcontext() if PROJ_GTE_92 else pytest.raises(
-        NotImplementedError, match="only_best requires PROJ 9.2"
-    ):
-        transformer = Transformer.from_crs(4326, 2964, only_best=True)
-        if not grids_available("ca_nrc_ntv2_0.tif"):
-            with pytest.raises(
-                ProjError,
-                match="Grid ca_nrc_ntv2_0.tif is not available.",
-            ):
-                transformer.transform(60, -100, errcheck=True)
+    transformer = Transformer.from_crs(4326, 2964, only_best=True)
+    if not grids_available("ca_nrc_ntv2_0.tif"):
+        with pytest.raises(
+            ProjError,
+            match="Grid ca_nrc_ntv2_0.tif is not available.",
+        ):
+            transformer.transform(60, -100, errcheck=True)
 
 
 def test_transformer_group():
@@ -745,14 +736,7 @@ def test_transformer_group__get_transform_crs():
     if grids_available(
         "nl_nsgi_nlgeo2018.tif", "nl_nsgi_rdtrans2018.tif", check_all=True
     ):
-        if PROJ_GTE_91:
-            assert len(tg.transformers) == 2
-        else:
-            assert len(tg.transformers) == 6
-    elif not PROJ_GTE_91 and grids_available("nl_nsgi_rdtrans2018.tif"):
         assert len(tg.transformers) == 2
-    elif not PROJ_GTE_91 and grids_available("nl_nsgi_nlgeo2018.tif"):
-        assert len(tg.transformers) == 4
     else:
         assert len(tg.transformers) == 1
 
@@ -761,7 +745,7 @@ def test_transformer__area_of_interest():
     transformer = Transformer.from_crs(
         "EPSG:7789",
         "EPSG:4936",
-        area_of_interest=AreaOfInterest(-177.25, -44.64, -43.3, -175.54),
+        area_of_interest=AreaOfInterest(-177.25, -44.64, -175.54, -43.3),
     )
     assert (
         transformer.description
@@ -773,7 +757,7 @@ def test_transformer_proj__area_of_interest():
     transformer = Transformer.from_proj(
         "EPSG:7789",
         "EPSG:4936",
-        area_of_interest=AreaOfInterest(-177.25, -44.64, -43.3, -175.54),
+        area_of_interest=AreaOfInterest(-177.25, -44.64, -175.54, -43.3),
     )
     assert (
         transformer.description
@@ -1046,9 +1030,10 @@ def test_transformer_group__download_grids(get_user_data_dir_mock, tmp_path, cap
                 "Downloading: https://cdn.proj.org/ca_nrc_ntv2_0.tif\n"
             )
         # make sure not downloaded again
-        with proj_env(), patch(
-            "pyproj.transformer._download_resource_file"
-        ) as download_mock:
+        with (
+            proj_env(),
+            patch("pyproj.transformer._download_resource_file") as download_mock,
+        ):
             append_data_dir(str(tmp_path))
             trans_group = TransformerGroup(4326, 2964)
             trans_group.download_grids()
@@ -1110,9 +1095,6 @@ def test_transformer_group__download_grids__directory(
             )
 
 
-@pytest.mark.skipif(
-    pyproj._datadir._USE_GLOBAL_CONTEXT, reason="Global Context not Threadsafe."
-)
 def test_transformer_multithread__pipeline():
     # https://github.com/pyproj4/pyproj/issues/782
     trans = Transformer.from_pipeline(
@@ -1128,9 +1110,6 @@ def test_transformer_multithread__pipeline():
             pass
 
 
-@pytest.mark.skipif(
-    pyproj._datadir._USE_GLOBAL_CONTEXT, reason="Global Context not Threadsafe."
-)
 def test_transformer_multithread__crs():
     # https://github.com/pyproj4/pyproj/issues/782
     trans = Transformer.from_crs(4326, 3857)
@@ -1345,8 +1324,8 @@ def test_transform_bounds__beyond_global_bounds():
     [
         (
             "ESRI:102036",
-            (-180.0, -90.0, 180.0, 1.3 if PROJ_GTE_92 else 0),
-            (0, -116576599 if PROJ_GTE_92 else -89178008, 0, 0),
+            (-180.0, -90.0, 180.0, 1.3),
+            (0, -116576599, 0, 0),
         ),
         ("ESRI:54026", (-180.0, -90.0, 180.0, 90.0), (0, -179545824, 0, 179545824)),
     ],
@@ -1670,22 +1649,15 @@ def test_transformer_force_over():
 
 def test_transformer__get_last_used_operation():
     transformer = Transformer.from_crs("EPSG:4326", "EPSG:3857")
-    if PROJ_GTE_91:
-        with pytest.raises(
-            ProjError,
-            match=(
-                r"Last used operation not found\. "
-                r"This is likely due to not initiating a transform\."
-            ),
-        ):
-            transformer.get_last_used_operation()
-        xxx, yyy = transformer.transform(1, 2)
-        operation = transformer.get_last_used_operation()
-        assert isinstance(operation, Transformer)
-        assert xxx, yyy == operation.transform(1, 2)
-    else:
-        with pytest.raises(
-            NotImplementedError,
-            match=r"PROJ 9\.1\+ required to get last used operation\.",
-        ):
-            transformer.get_last_used_operation()
+    with pytest.raises(
+        ProjError,
+        match=(
+            r"Last used operation not found\. "
+            r"This is likely due to not initiating a transform\."
+        ),
+    ):
+        transformer.get_last_used_operation()
+    xxx, yyy = transformer.transform(1, 2)
+    operation = transformer.get_last_used_operation()
+    assert isinstance(operation, Transformer)
+    assert xxx, yyy == operation.transform(1, 2)

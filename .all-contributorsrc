@@ -600,7 +600,8 @@
       "profile": "https://github.com/greglucas",
       "contributions": [
         "code",
-        "ideas"
+        "ideas",
+        "maintenance"
       ]
     },
     {
@@ -651,7 +652,8 @@
       "avatar_url": "https://avatars.githubusercontent.com/u/22159116?v=4",
       "profile": "https://cyschneck.com/",
       "contributions": [
-        "doc"
+        "doc",
+        "test"
       ]
     },
     {
@@ -661,6 +663,33 @@
       "profile": "https://github.com/zanejgr",
       "contributions": [
         "doc"
+      ]
+    },
+    {
+      "login": "kloczek",
+      "name": "Tomasz Kłoczko",
+      "avatar_url": "https://avatars.githubusercontent.com/u/31284574?v=4",
+      "profile": "https://github.com/kloczek",
+      "contributions": [
+        "test"
+      ]
+    },
+    {
+      "login": "tqa236",
+      "name": "Trinh Quoc Anh",
+      "avatar_url": "https://avatars.githubusercontent.com/u/25203655?v=4",
+      "profile": "https://github.com/tqa236",
+      "contributions": [
+        "test"
+      ]
+    },
+    {
+      "login": "necabo",
+      "name": "necabo",
+      "avatar_url": "https://avatars.githubusercontent.com/u/23185845?v=4",
+      "profile": "https://github.com/necabo",
+      "contributions": [
+        "platform"
       ]
     }
   ],

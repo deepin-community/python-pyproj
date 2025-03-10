@@ -1,6 +1,27 @@
 Change Log
 ==========
 
+3.7.1
+------
+- WHL: Add wheels for musllinux (pull #1461)
+- WHL: MacOS minimum deployment target moved to 13 (pull #1475)
+- WHL: Wheels contain PROJ 9.5.1 (pull #1477)
+- MNT: Cython 3.1+ fixes (pull #1452)
+- MNT: Remove use of utcnow() and change to naive datetimes instead (pull #1450)
+- TST: remove checking is python >= 3.4 (pull #1446)
+- TST: Add assert statements at the end of tests (pull #1453)
+- LNT: Setup ruff & lint fixes (pull #1455 #1456)
+
+3.7.0
+------
+- WHL: Wheels contain PROJ 9.4.1 (pull #1423)
+- DEP: Minimum supported Python version 3.10 (pull #1357)
+- DEP: Minimum PROJ version 9.2 (pull #1394)
+- ENH: Add :meth:`CRS.is_deprecated` and :meth:`CRS.get_non_deprecated` (pull #1383)
+- PERF: thread local context (issue #1133)
+- ENH: Add runtime & compiled PROJ versions (discussion #1420)
+- BUG: Handle changes to HotineObliqueMercatorBConversion (issue #1429)
+
 3.6.1
 ------
 - WHL: Wheels contain PROJ 9.3.0 (issue #1327)
@@ -150,7 +171,7 @@ Change Log
 * ENH: Added :ref:`network_api` (#675, #691, #695)
 * ENH: Added ability to use global context (issue #661)
 * ENH: Added transformation grid sync API/CLI (issue #572)
-* ENH: Support obects with '__array__' method (pandas.Series, xarray.DataArray, dask.array.Array) (issue #573)
+* ENH: Support objects with '__array__' method (pandas.Series, xarray.DataArray, dask.array.Array) (issue #573)
 * ENH: Added :func:`pyproj.datadir.get_user_data_dir` (pull #636)
 * ENH: Added :attr:`pyproj.transformer.Transformer.is_network_enabled` (issue #629)
 * ENH: Added :meth:`pyproj.transformer.TransformerGroup.download_grids` (pull #643)
