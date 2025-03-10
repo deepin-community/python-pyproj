@@ -20,14 +20,7 @@ from pyproj.crs.enums import CoordinateOperationType, DatumType
 from pyproj.enums import ProjVersion, WktVersion
 from pyproj.exceptions import CRSError
 from pyproj.transformer import TransformerGroup
-from test.conftest import (
-    PROJ_GTE_91,
-    PROJ_GTE_901,
-    PROJ_GTE_911,
-    PROJ_GTE_921,
-    assert_can_pickle,
-    grids_available,
-)
+from test.conftest import PROJ_GTE_921, PROJ_GTE_941, assert_can_pickle, grids_available
 
 
 class CustomCRS:
@@ -232,6 +225,36 @@ def test_to_wkt_pretty():
     assert "\n" not in crs.to_wkt()
 
 
+def test_no_non_deprecated():
+    crs = CRS.from_epsg(4326)
+    assert not crs.is_deprecated
+    non_dep = crs.get_non_deprecated()
+    assert len(non_dep) == 0
+
+
+def test_non_deprecated():
+    crs = CRS.from_epsg(28473)
+    assert crs.is_deprecated
+    non_dep = crs.get_non_deprecated()
+    assert len(non_dep) == 1
+    assert "EPSG:2503" == ":".join(non_dep[0].to_authority())
+
+
+def test_non_deprecated_empty():
+    crs = CRS.from_epsg(3151)
+    assert crs.is_deprecated
+    assert len(crs.get_non_deprecated()) == 0
+
+
+def test_non_deprecated_multiple():
+    crs = CRS.from_epsg(3315)
+    assert crs.is_deprecated
+    non_dep = [":".join(el.to_authority()) for el in crs.get_non_deprecated()]
+    assert len(non_dep) == 4
+    for elem in ["EPSG:3989", "EPSG:3988", "EPSG:3987", "EPSG:3986"]:
+        assert elem in non_dep
+
+
 @pytest.mark.parametrize(
     "version, expected",
     [
@@ -318,9 +341,6 @@ def test_repr_epsg():
 
 
 def test_repr__undefined():
-    datum_name = "unknown"
-    if PROJ_GTE_901:
-        datum_name = f"{datum_name} using nadgrids=@null"
     assert repr(
         CRS(
             "+proj=merc +a=6378137.0 +b=6378137.0 +nadgrids=@null"
@@ -337,7 +357,7 @@ def test_repr__undefined():
         "Coordinate Operation:\n"
         "- name: unknown to WGS84\n"
         "- method: NTv2\n"
-        f"Datum: {datum_name}\n"
+        "Datum: unknown using nadgrids=@null\n"
         "- Ellipsoid: unknown\n"
         "- Prime Meridian: Greenwich\n"
         "Source CRS: unknown\n"
@@ -410,9 +430,7 @@ def test_datum_unknown():
     datum_name = "Unknown based on WGS84 ellipsoid"
     if PROJ_GTE_921:
         datum_name = "Unknown based on WGS 84 ellipsoid"
-    if PROJ_GTE_901:
-        datum_name = f"{datum_name} using towgs84=0,0,0,0,0,0,0"
-    assert crs.datum.name == datum_name
+    assert crs.datum.name == f"{datum_name} using towgs84=0,0,0,0,0,0,0"
 
 
 def test_epsg__not_found():
@@ -649,17 +667,15 @@ def test_coordinate_operation_grids__alternative_grid_name():
     assert grid.short_name == "ca_nrc_ntv1_can.tif"
     assert grid.package_name == ""
     assert grid.url == "https://cdn.proj.org/ca_nrc_ntv1_can.tif"
-    if (PROJ_GTE_91 and grids_available(grid.short_name, check_network=False)) or (
-        not PROJ_GTE_91 and grids_available(grid.short_name)
-    ):
+    if grids_available(grid.short_name, check_network=False):
         assert grid.available is True
         assert grid.full_name.endswith(grid.short_name)
-    elif PROJ_GTE_911 and pyproj.network.is_network_enabled():
+    elif pyproj.network.is_network_enabled():
         assert grid.available is True
-        assert grid.full_name == grid.url
-    elif PROJ_GTE_91 and pyproj.network.is_network_enabled():
-        assert grid.available is True
-        assert grid.full_name == ""
+        if PROJ_GTE_941:
+            assert grid.full_name == ""
+        else:
+            assert grid.full_name == grid.url
     else:
         assert grid.available is False
         assert grid.full_name == ""
@@ -715,7 +731,7 @@ def test_coordinate_operation__from_authority__empty():
 
 
 def test_datum__from_epsg():
-    datum_wkt = (
+    datum_wkt_prefix = (
         'ENSEMBLE["World Geodetic System 1984 ensemble",'
         'MEMBER["World Geodetic System 1984 (Transit)",ID["EPSG",1166]],'
         'MEMBER["World Geodetic System 1984 (G730)",ID["EPSG",1152]],'
@@ -724,10 +740,14 @@ def test_datum__from_epsg():
         'MEMBER["World Geodetic System 1984 (G1674)",ID["EPSG",1155]],'
         'MEMBER["World Geodetic System 1984 (G1762)",ID["EPSG",1156]],'
         'MEMBER["World Geodetic System 1984 (G2139)",ID["EPSG",1309]],'
+    )
+    datum_wkt_suffix = (
         'ELLIPSOID["WGS 84",6378137,298.257223563,LENGTHUNIT["metre",1],'
         'ID["EPSG",7030]],ENSEMBLEACCURACY[2.0],ID["EPSG",6326]]'
     )
-    assert Datum.from_epsg("6326").to_wkt() == datum_wkt
+    # Testing this way avoids problems when new members are added to the datum ensemble
+    assert Datum.from_epsg("6326").to_wkt().startswith(datum_wkt_prefix)
+    assert Datum.from_epsg("6326").to_wkt().endswith(datum_wkt_suffix)
 
 
 def test_datum__from_authority():
@@ -982,8 +1002,9 @@ def test_to_wkt_none_warning(wkt_version):
 
 def test_to_proj4_none_warning():
     crs = CRS("EPSG:4326")
-    with patch("pyproj.crs.crs.CRS._crs") as crs_mock, pytest.raises(
-        CRSError, match="CRS cannot be converted to a PROJ string"
+    with (
+        patch("pyproj.crs.crs.CRS._crs") as crs_mock,
+        pytest.raises(CRSError, match="CRS cannot be converted to a PROJ string"),
     ):
         crs_mock.to_proj4.return_value = None
         assert crs.to_proj4() is None
@@ -991,8 +1012,9 @@ def test_to_proj4_none_warning():
 
 def test_to_json_none_warning():
     crs = CRS("EPSG:4326")
-    with patch("pyproj.crs.crs.CRS._crs") as crs_mock, pytest.raises(
-        CRSError, match="CRS cannot be converted to a PROJ JSON string"
+    with (
+        patch("pyproj.crs.crs.CRS._crs") as crs_mock,
+        pytest.raises(CRSError, match="CRS cannot be converted to a PROJ JSON string"),
     ):
         crs_mock.to_json.return_value = None
         assert crs.to_json() is None
@@ -1573,9 +1595,6 @@ def test_numpy_bool_kwarg_true():
     assert "+south " in crs.srs
 
 
-@pytest.mark.skipif(
-    pyproj._datadir._USE_GLOBAL_CONTEXT, reason="Global Context not Threadsafe."
-)
 def test_crs_multithread():
     # https://github.com/pyproj4/pyproj/issues/782
     crs = CRS(4326)
